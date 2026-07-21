@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import {
+  DonneesReformulation,
   DonneesResumeDebat,
   DonneesSynthese,
   IaService,
@@ -104,6 +105,23 @@ export class StubIaService implements IaService {
       '[Texte généré par le service de démonstration — la rédaction par IA sera branchée ultérieurement.]',
     );
     return Promise.resolve(phrases.join(' '));
+  }
+
+  reformulerIndicateur(donnees: DonneesReformulation): Promise<string> {
+    const recentes = [...donnees.sources].sort((a, b) =>
+      b.annee.localeCompare(a.annee),
+    );
+    const plusRecente = recentes[0];
+    const details = donnees.sources
+      .map((s) => `${s.source.split(' — ')[0]} : ${s.valeur} (${s.annee})`)
+      .join(' ; ');
+    return Promise.resolve(
+      `${donnees.indicateur} — ${donnees.paysOuZone} : ` +
+        (plusRecente
+          ? `${plusRecente.valeur} (${plusRecente.annee}). Sources : ${details}.`
+          : 'aucune donnée collectée.') +
+        ' [Reformulation de démonstration — IA réelle à venir.]',
+    );
   }
 
   /** "2024-01-01" → "2024" */

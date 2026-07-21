@@ -1,11 +1,13 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { EventEmitterModule } from '@nestjs/event-emitter';
+import { ScheduleModule } from '@nestjs/schedule';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { validateEnv } from './config/env.validation';
 import { dataSourceOptions } from './config/typeorm-datasource';
 import { AuthModule } from './modules/auth/auth.module';
 import { BackOfficeModule } from './modules/back-office/back-office.module';
+import { CollecteModule } from './modules/collecte/collecte.module';
 import { ConsultationsModule } from './modules/consultations/consultations.module';
 import { DebatsModule } from './modules/debats/debats.module';
 import { FeedModule } from './modules/feed/feed.module';
@@ -31,6 +33,9 @@ import { ReferentielModule } from './modules/referentiel/referentiel.module';
     // Communication inter-modules par événements internes (ex. debat.resume.valide → Feed).
     EventEmitterModule.forRoot(),
 
+    // Planificateur des tâches récurrentes (collecte continue).
+    ScheduleModule.forRoot(),
+
     // Socle transverse (Dev A) — doit être importé avant les modules qui dépendent
     // du RolesGuard/JWT global.
     AuthModule,
@@ -39,6 +44,7 @@ import { ReferentielModule } from './modules/referentiel/referentiel.module';
     ReferentielModule, // Dev B
     FichePaysModule, // Dev B — valeurs d'indicateurs, synthèses IA + validation
     DebatsModule, // Dev B — débats & lives (REST + WebSocket temps réel)
+    CollecteModule, // Dev B — collecte/veille continue (cron) → propositions de valeurs
     FeedModule, // Dev A
     ConsultationsModule, // Dev A
     NotificationsModule, // Dev A

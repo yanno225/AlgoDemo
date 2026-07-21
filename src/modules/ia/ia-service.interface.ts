@@ -77,4 +77,21 @@ export interface IaService {
    * publication dans le Feed.
    */
   genererResumeDebat(donnees: DonneesResumeDebat): Promise<string>;
+
+  /**
+   * À partir de TOUTES les données collectées sur un indicateur (plusieurs
+   * sources), l'IA reformule une phrase claire et recommande la valeur la plus
+   * fiable. Brouillon soumis à validation admin avant publication.
+   */
+  reformulerIndicateur(donnees: DonneesReformulation): Promise<string>;
+}
+
+/** Données transmises à l'IA pour reformuler un indicateur collecté */
+export interface DonneesReformulation {
+  indicateur: string;
+  critere: string;
+  thematique: string;
+  paysOuZone: string;
+  /** Ce que chaque source a rapporté (valeur la plus récente) */
+  sources: { source: string; valeur: number; annee: string }[];
 }

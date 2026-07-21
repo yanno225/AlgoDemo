@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
+  DonneesReformulation,
   DonneesResumeDebat,
   DonneesSynthese,
   IaService,
@@ -150,6 +151,31 @@ export class MistralIaService implements IaService {
       );
       return [];
     }
+  }
+
+  async reformulerIndicateur(donnees: DonneesReformulation): Promise<string> {
+    const sources = donnees.sources
+      .map((s) => `- ${s.source} : ${s.valeur} (${s.annee})`)
+      .join('\n');
+
+    return this.completer([
+      {
+        role: 'system',
+        content:
+          "Tu aides un administrateur à publier une donnée fiable pour des citoyens, en français. " +
+          "À partir des valeurs rapportées par plusieurs sources, rédige UNE phrase claire et neutre " +
+          "indiquant la valeur la plus fiable (privilégie la plus récente et la concordance des sources), " +
+          "en citant la ou les sources. N'invente aucun chiffre : utilise uniquement les valeurs fournies.",
+      },
+      {
+        role: 'user',
+        content:
+          `Indicateur : ${donnees.indicateur}\nCritère : ${donnees.critere}\n` +
+          `Thématique : ${donnees.thematique}\nPays : ${donnees.paysOuZone}\n\n` +
+          `Valeurs collectées :\n${sources}\n\n` +
+          `Rédige la phrase de synthèse à soumettre à validation.`,
+      },
+    ]);
   }
 
   /** Appel à l'API de complétion Mistral */

@@ -351,6 +351,28 @@ accès depuis d'autres appareils, autoriser Node **et** les ports LiveKit
 ⚠️ `/live-demo` et les comptes de démo sont des outils de test — à retirer
 avant la mise en production (l'app mobile consommera les mêmes API/WebSocket).
 
+## Collecte / Veille continue (CDC §3.8)
+
+Jobs planifiés (cron **hebdomadaire**) qui interrogent **plusieurs sources
+ouvertes** — pur HTTP, **aucun token IA** : API Banque Mondiale, OMS (GHO)…
+Chaque valeur devient une **proposition** ; plusieurs sources pour un même
+indicateur permettent la **triangulation** (croisement de sources → fiabilité).
+L'admin voit toutes les valeurs collectées + une **reformulation rédigée par
+l'IA** (appel Mistral à la demande), puis valide → la valeur entre dans la
+Fiche-pays.
+
+| Route (ADMIN) | Description |
+|---|---|
+| `POST /collecte/lancer` | Déclencher maintenant toutes les sources → propositions |
+| `POST /collecte/ingerer-texte` | Ingérer un article/rapport → l'IA extrait les valeurs |
+| `GET /collecte/triangulation` | Par indicateur : ce que dit chaque source + concordance |
+| `GET /collecte/indicateur/:id/analyse` | Toutes les sources d'un indicateur + reformulation IA |
+| `GET /collecte/propositions?statut=&pays=` | File des propositions |
+| `PATCH /collecte/propositions/:id/valider` · `/rejeter` | Valider (→ Fiche-pays) / rejeter |
+
+Ajouter une source = créer un `SourceConnector` et l'ajouter au tableau
+`SOURCE_CONNECTORS` du module. Rien d'autre à changer.
+
 ## Structure du projet
 
 ```
