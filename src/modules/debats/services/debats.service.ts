@@ -22,6 +22,8 @@ import {
   StatutSignalement,
 } from '../enums/debats.enums';
 import { AuthUser } from '../../../common/interfaces/auth-user.interface';
+import { Role } from '../../../common/enums/role.enum';
+import { User } from '../../auth/entities/user.entity';
 import { DebatsGateway } from '../gateway/debats.gateway';
 import { LiveService } from './live.service';
 import { LiveAccess, LivekitService } from './livekit.service';
@@ -37,6 +39,8 @@ export class DebatsService {
     private readonly signalementRepo: Repository<SignalementDebat>,
     @InjectRepository(Thematique)
     private readonly thematiqueRepo: Repository<Thematique>,
+    @InjectRepository(User)
+    private readonly userRepo: Repository<User>,
     private readonly eventEmitter: EventEmitter2,
     private readonly gateway: DebatsGateway,
     private readonly liveService: LiveService,
@@ -64,6 +68,9 @@ export class DebatsService {
     if (!thematique) {
       throw new NotFoundException(`Thématique ${dto.thematiqueId} introuvable`);
     }
+    if (dto.moderateurId) {
+      await this.verifierModerateur(dto.moderateurId);
+    }
     return this.debatRepo.save(
       this.debatRepo.create({
         titre: dto.titre,
@@ -73,6 +80,24 @@ export class DebatsService {
         thematique,
       }),
     );
+  }
+
+  /**
+   * Le modérateur doit être un compte existant, non bloqué, habilité à animer
+   * (POINT_FOCAL ou ADMIN — CDC §6.4 : modérateur désigné parmi le staff certifié).
+   */
+  private async verifierModerateur(moderateurId: string): Promise<void> {
+    const moderateur = await this.userRepo.findOneBy({ id: moderateurId });
+    if (!moderateur) {
+      throw new NotFoundException(
+        `Modérateur ${moderateurId} introuvable (laisser moderateurId vide, ou utiliser l'id d'un compte POINT_FOCAL/ADMIN existant)`,
+      );
+    }
+    if (moderateur.role === Role.UTILISATEUR) {
+      throw new BadRequestException(
+        'Le modérateur doit être un compte POINT_FOCAL ou ADMIN',
+      );
+    }
   }
 
   /** Liste publique — filtre : a-venir | en-cours | termines */
@@ -106,7 +131,12 @@ export class DebatsService {
     if (dto.titre !== undefined) debat.titre = dto.titre;
     if (dto.description !== undefined) debat.description = dto.description;
     if (dto.dateDebut !== undefined) debat.dateDebut = new Date(dto.dateDebut);
-    if (dto.moderateurId !== undefined) debat.moderateurId = dto.moderateurId;
+    if (dto.moderateurId !== undefined) {
+      if (dto.moderateurId) {
+        await this.verifierModerateur(dto.moderateurId);
+      }
+      debat.moderateurId = dto.moderateurId;
+    }
     if (dto.thematiqueId !== undefined) {
       const thematique = await this.thematiqueRepo.findOneBy({
         id: dto.thematiqueId,

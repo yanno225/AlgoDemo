@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { User } from '../auth/entities/user.entity';
 import { ReferentielModule } from '../referentiel/referentiel.module';
 import { DebatsController } from './controllers/debats.controller';
 import { LiveDemoController } from './controllers/live-demo.controller';
@@ -28,6 +29,7 @@ import { LivekitService } from './services/livekit.service';
       AffirmationDebat,
       VoteAffirmation,
       SignalementDebat,
+      User, // lecture seule : validation du modérateur désigné
     ]),
     // Repositories Thematique (rattachement des débats)
     ReferentielModule,
