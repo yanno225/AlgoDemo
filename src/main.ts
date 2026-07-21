@@ -36,6 +36,9 @@ async function bootstrap(): Promise<void> {
     .addTag('Référentiel — Thématiques')
     .addTag('Référentiel — Critères')
     .addTag('Référentiel — Indicateurs')
+    .addTag('Fiche-pays')
+    .addTag('Fiche-pays — Valeurs d’indicateurs')
+    .addTag('Fiche-pays — Synthèses IA')
     .build();
   const document = SwaggerModule.createDocument(app, swaggerConfig);
   SwaggerModule.setup('api/docs', app, document);

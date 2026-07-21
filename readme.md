@@ -77,6 +77,54 @@ Hiérarchie **Thématique › Critère › Indicateur** — socle consommé par 
 | `GET /{ressource}/:id` | Public | Détail |
 | `POST` / `PATCH` / `DELETE` | `ADMIN` | CRUD (suppressions en cascade) |
 
+## Module Fiche-pays (CDC §3.6) — étape 1
+
+La fiche d'un pays = le squelette du Référentiel + les **valeurs mesurées**
+(`valeur`, `dateMesure`, `paysOuZone`, `source`), triées de la plus récente à la
+plus ancienne. Les valeurs sont saisies par l'admin ou importées par CSV, en
+attendant le pipeline scraping → IA → validation admin.
+
+| Route | Accès | Description |
+|---|---|---|
+| `GET /fiche-pays/{pays}` | Public | Fiche complète du pays (insensible à la casse) |
+| `GET /valeurs-indicateurs?pays=&indicateurId=` | Public | Liste filtrable des valeurs |
+| `POST` / `PATCH` / `DELETE /valeurs-indicateurs` | `ADMIN` | Saisie/correction manuelle |
+| `POST /valeurs-indicateurs/import` | `ADMIN` | Import CSV en lot (multipart, champ `fichier`) |
+
+Format CSV (séparateur `;` ou `,` ; en-tête obligatoire ; doublons ignorés ;
+virgule décimale acceptée avec `;`) — **enregistrer le fichier en UTF-8** :
+
+```csv
+indicateurId;valeur;dateMesure;paysOuZone;source
+<uuid-indicateur>;66,8;2024-01-01;Côte d'Ivoire;Annuaire statistique 2024
+```
+
+Le seed insère le **référentiel officiel complet** (86 indicateurs des ateliers
+ESATIC) et des **valeurs de démonstration** pour la Côte d'Ivoire (14 valeurs,
+source marquée « à remplacer »).
+
+## Synthèses IA — ⚠️ génération provisoire (stub)
+
+Chaque thématique de la fiche-pays peut recevoir une **synthèse rédigée**,
+générée par le service IA puis **validée par un humain** avant publication :
+
+```
+POST /syntheses/generer (ADMIN)          → statut EN_ATTENTE_VALIDATION
+PATCH /syntheses/{id}/valider (ADMIN)    → PUBLIEE (texteCorrige facultatif)
+PATCH /syntheses/{id}/rejeter (ADMIN)    → REJETEE (traçabilité)
+GET  /syntheses?statut=&pays= (ADMIN)    → file de validation
+```
+
+Seule la synthèse **PUBLIEE** la plus récente de chaque thématique apparaît
+dans `GET /fiche-pays/{pays}` (champ `synthese`).
+
+Le service IA est un **stub** (`src/modules/ia/stub-ia.service.ts`) : texte
+mécanique, aucun appel externe. Pour brancher la vraie IA (Claude), implémenter
+`IaService` avec le SDK Anthropic et changer **une ligne** dans
+`src/modules/ia/ia.module.ts`. Le contrat est décrit dans
+`src/modules/ia/ia-service.interface.ts` (synthèses + future extraction de
+valeurs depuis les textes scrapés).
+
 ## Structure du projet
 
 ```
@@ -89,8 +137,10 @@ src/
 │   ├── migrations/
 │   └── seeds/
 └── modules/
-    └── referentiel/         # Thématique › Critère › Indicateur (entités, DTOs, services, contrôleurs)
+    ├── referentiel/         # Thématique › Critère › Indicateur (entités, DTOs, services, contrôleurs)
+    ├── fiche-pays/          # ValeurIndicateur + consultation par pays + import CSV + synthèses IA
+    └── ia/                  # Service IA partagé (contrat) — stub à remplacer par Claude
 ```
 
-Modules à venir : `debats` (WebSocket temps réel), `fiche-pays` (+ synthèses IA),
-`collecte` (Dev B) · `auth`, `feed`, `consultations`, `notifications` (Dev A).
+Modules à venir : `debats` (WebSocket temps réel), `collecte` (scraping) (Dev B)
+· `auth`, `feed`, `consultations`, `notifications` (Dev A).
