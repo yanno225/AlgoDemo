@@ -80,9 +80,12 @@ curl -X POST http://localhost:3000/thematiques \
   -d '{"libelle": "Test"}'
 ```
 
-⚠️ **Envoi OTP non branché** : `OtpService` (`src/modules/auth/services/otp.service.ts`)
-journalise le code au lieu de l'envoyer par email/SMS — à remplacer par un vrai
-fournisseur avant mise en production.
+**Envoi OTP par email — branché (SMTP)** : configurer les variables `SMTP_*`
+dans le `.env` (voir `.env.example` : Gmail « mot de passe d'application » ou
+Brevo). Sans configuration SMTP, le serveur bascule en **MODE DEV** : le code
+s'affiche dans les logs au lieu d'être envoyé (interdit avec de vrais
+utilisateurs). Quand le SMTP est configuré, le code n'est jamais journalisé.
+L'envoi par SMS reste à brancher (fournisseur à choisir par l'organisation).
 
 ## Module Feed / Contenu (CDC §6.1-§6.2, §9.4)
 

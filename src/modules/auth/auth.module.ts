@@ -5,6 +5,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { AuthController } from './auth.controller';
 import { User } from './entities/user.entity';
 import { AuthService } from './services/auth.service';
+import { MailService } from './services/mail.service';
 import { OtpService } from './services/otp.service';
 import { UsersService } from './services/users.service';
 import { UsersAdminController } from './users-admin.controller';
@@ -34,7 +35,7 @@ import { UsersAdminController } from './users-admin.controller';
     }),
   ],
   controllers: [AuthController, UsersAdminController],
-  providers: [AuthService, UsersService, OtpService],
+  providers: [AuthService, UsersService, OtpService, MailService],
   exports: [UsersService],
 })
 export class AuthModule {}
