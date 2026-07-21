@@ -7,6 +7,7 @@ import { dataSourceOptions } from './config/typeorm-datasource';
 import { AuthModule } from './modules/auth/auth.module';
 import { BackOfficeModule } from './modules/back-office/back-office.module';
 import { ConsultationsModule } from './modules/consultations/consultations.module';
+import { DebatsModule } from './modules/debats/debats.module';
 import { FeedModule } from './modules/feed/feed.module';
 import { FichePaysModule } from './modules/fiche-pays/fiche-pays.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
@@ -37,6 +38,7 @@ import { ReferentielModule } from './modules/referentiel/referentiel.module';
     // Modules métier.
     ReferentielModule, // Dev B
     FichePaysModule, // Dev B — valeurs d'indicateurs, synthèses IA + validation
+    DebatsModule, // Dev B — débats & lives (REST + WebSocket temps réel)
     FeedModule, // Dev A
     ConsultationsModule, // Dev A
     NotificationsModule, // Dev A

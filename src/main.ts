@@ -46,6 +46,7 @@ async function bootstrap(): Promise<void> {
     .addTag('Fiche-pays')
     .addTag('Fiche-pays — Valeurs d’indicateurs')
     .addTag('Fiche-pays — Synthèses IA')
+    .addTag('Débats & Lives')
     .build();
   const document = SwaggerModule.createDocument(app, swaggerConfig);
   SwaggerModule.setup('api/docs', app, document);

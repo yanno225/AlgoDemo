@@ -13,7 +13,7 @@
     "migration:generate": "npm run typeorm -- migration:generate",
     "migration:run": "npm run typeorm -- migration:run",
     "migration:revert": "npm run typeorm -- migration:revert",
-    "seed": "ts-node src/database/seeds/referentiel.seed.ts && ts-node src/database/seeds/fiche-pays.seed.ts && ts-node src/database/seeds/admin.seed.ts"
+    "seed": "ts-node src/database/seeds/referentiel.seed.ts && ts-node src/database/seeds/fiche-pays.seed.ts && ts-node src/database/seeds/admin.seed.ts && ts-node src/database/seeds/demo-users.seed.ts"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.0",
@@ -22,8 +22,10 @@
     "@nestjs/event-emitter": "^3.0.0",
     "@nestjs/jwt": "^11.0.0",
     "@nestjs/platform-express": "^11.0.0",
+    "@nestjs/platform-socket.io": "^11.1.28",
     "@nestjs/swagger": "^11.0.0",
     "@nestjs/typeorm": "^11.0.0",
+    "@nestjs/websockets": "^11.1.28",
     "bcryptjs": "^2.4.3",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.1",
@@ -32,6 +34,7 @@
     "pg": "^8.13.1",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
+    "socket.io": "^4.8.3",
     "swagger-ui-express": "^5.0.1",
     "typeorm": "^0.3.20"
   },
@@ -42,6 +45,7 @@
     "@types/express": "^5.0.0",
     "@types/multer": "^2.2.0",
     "@types/node": "^22.10.0",
+    "socket.io-client": "^4.8.3",
     "ts-node": "^10.9.2",
     "typescript": "^5.7.0"
   }

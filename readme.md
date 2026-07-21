@@ -246,6 +246,43 @@ mécanique, aucun appel externe. Pour brancher la vraie IA (Claude), implémente
 `src/modules/ia/ia-service.interface.ts` (synthèses + future extraction de
 valeurs depuis les textes scrapés).
 
+## Module Débats & Lives (CDC §6.4)
+
+Sessions live encadrées : votes en direct sur des affirmations, signalements de
+fausses informations, replay. REST pour la gestion, **WebSocket (socket.io,
+namespace `/debats`)** pour la salle.
+
+| Route | Accès | Description |
+|---|---|---|
+| `GET /debats?filtre=a-venir\|en-cours\|termines` | Public | Liste |
+| `GET /debats/:id` | Public | Détail + affirmations |
+| `POST` / `PATCH` / `DELETE /debats` | `POINT_FOCAL`/`ADMIN` (DELETE : ADMIN) | Planification |
+| `PATCH /debats/:id/demarrer` · `/cloturer` | `POINT_FOCAL`, `ADMIN` | Cycle du live — `demarrer` émet `notif.debat.demarre` |
+| `PATCH /debats/:id/replay` | `POINT_FOCAL`, `ADMIN` | URL d'archive (débat terminé) |
+| `POST /debats/:id/affirmations` · `PATCH /debats/affirmations/:id/fermer` | `POINT_FOCAL`, `ADMIN` | Affirmations mises au vote (diffusées en direct) |
+| `GET /debats/:id/signalements` · `PATCH /debats/signalements/:id/traiter` | `POINT_FOCAL`, `ADMIN` | Modération des signalements |
+
+WebSocket — client : `io('/debats', { auth: { token: '<accessToken>' } })`.
+Événements client → serveur : `rejoindre`, `voter`, `signaler`.
+Serveur → salle : `participants.maj`, `affirmation.nouvelle`, `vote.maj`,
+`affirmation.fermee`, `debat.demarre`, `debat.cloture`, `signalement.nouveau`
+(staff). Détail des payloads : `src/modules/debats/gateway/debats.gateway.ts`.
+
+### 🧪 Test en salle (conditions réelles, plusieurs téléphones)
+
+1. Lancer l'API (`npm run start:dev`) et récupérer l'IP locale du PC (`ipconfig`).
+2. Les participants (même Wi-Fi) ouvrent `http://<ip-du-pc>:3000/live-demo`
+   sur leur téléphone et se connectent — comptes de démo seedés :
+   `citoyen1@algodemo.local` … `citoyen5` / `pointfocal@algodemo.local`
+   (mot de passe `Demo1234!`), ou leur propre compte.
+3. L'animateur (admin/point focal) crée un débat (Swagger), le **démarre**,
+   puis soumet des affirmations depuis son panneau modérateur sur la page.
+4. La salle vote ✅/❌ — les jauges bougent en direct sur tous les écrans ;
+   les signalements arrivent en direct chez le modérateur.
+
+⚠️ `/live-demo` et les comptes de démo sont des outils de test — à retirer
+avant la mise en production (l'app mobile consommera les mêmes API/WebSocket).
+
 ## Structure du projet
 
 ```
@@ -260,6 +297,7 @@ src/
 └── modules/
     ├── referentiel/         # Thématique › Critère › Indicateur (Dev B)
     ├── fiche-pays/          # ValeurIndicateur + consultation par pays + import CSV + synthèses IA (Dev B)
+    ├── debats/              # Débats & lives : REST + WebSocket temps réel + page /live-demo (Dev B)
     ├── ia/                  # Service IA partagé (contrat) — stub à remplacer par Claude (Dev B)
     ├── auth/                # JWT, RBAC, 2FA, RGPD (Dev A)
     ├── feed/                # Contenus, historique, événement debat.resume.valide (Dev A)
@@ -268,5 +306,6 @@ src/
     └── back-office/         # Dashboard, modération unifiée, journal d'audit global (Dev A)
 ```
 
-Modules à venir : `debats` (WebSocket temps réel) et `collecte` (scraping), côté
-Dev B — le périmètre Dev A (§4 de la doc de répartition) est complet.
+Modules à venir (Dev B) : résumés post-débat (IA + validation → événement
+`debat.resume.valide` vers le Feed) et `collecte` (scraping) — le périmètre
+Dev A (§4 de la doc de répartition) est complet.
