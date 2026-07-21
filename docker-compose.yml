@@ -25,15 +25,20 @@ services:
     image: livekit/livekit-server:v1.8
     container_name: algodemo_livekit
     restart: unless-stopped
-    command: --dev --bind 0.0.0.0
+    # --node-ip : IP annoncée aux navigateurs pour la connexion média (WebRTC).
+    #   127.0.0.1 = test sur le même PC. Pour des téléphones/appareils distants,
+    #   mettre l'IP LAN du PC dans LIVEKIT_NODE_IP (.env), ex. 192.168.1.20.
+    command: --config /etc/livekit.yaml --node-ip ${LIVEKIT_NODE_IP:-127.0.0.1}
     environment:
       # ⚠️ Clés de DÉVELOPPEMENT — doivent correspondre à LIVEKIT_API_KEY/SECRET du .env.
       # À régénérer pour la production (voir README).
       LIVEKIT_KEYS: "${LIVEKIT_API_KEY:-devkey}: ${LIVEKIT_API_SECRET:-devsecret_a_changer_32chars_min_ok}"
+    volumes:
+      - ./livekit.yaml:/etc/livekit.yaml:ro
     ports:
       - "${LIVEKIT_PORT:-7880}:7880"      # signalisation WebSocket / API
-      - "7881:7881"                        # WebRTC TCP
-      - "50000-50019:50000-50019/udp"      # médias WebRTC (UDP)
+      - "7881:7881"                        # WebRTC TCP (repli)
+      - "7882:7882/udp"                    # médias WebRTC (UDP)
 
 volumes:
   pgdata:
