@@ -10,6 +10,7 @@ import { Debat } from './entities/debat.entity';
 import { ParticipationDebat } from './entities/participation-debat.entity';
 import { ResumeDebat } from './entities/resume-debat.entity';
 import { SignalementDebat } from './entities/signalement-debat.entity';
+import { TranscriptionSegment } from './entities/transcription-segment.entity';
 import { VoteAffirmation } from './entities/vote-affirmation.entity';
 import { DebatsGateway } from './gateway/debats.gateway';
 import { DebatsService } from './services/debats.service';
@@ -33,6 +34,7 @@ import { ResumesService } from './services/resumes.service';
       VoteAffirmation,
       SignalementDebat,
       ResumeDebat,
+      TranscriptionSegment,
       User, // lecture seule : validation du modérateur désigné
     ]),
     // Repositories Thematique (rattachement des débats)

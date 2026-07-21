@@ -43,6 +43,8 @@ export interface DonneesResumeDebat {
   titre: string;
   thematique: string;
   description?: string | null;
+  /** Verbatim du débat (ce qui a été réellement dit), dans l'ordre */
+  transcription: { intervenant: string; texte: string }[];
   /** Affirmations soumises au vote pendant le live, avec leurs décomptes */
   affirmations: {
     texte: string;

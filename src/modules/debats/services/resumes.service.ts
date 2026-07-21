@@ -42,11 +42,15 @@ export class ResumesService {
       );
     }
 
-    const affirmations = await this.liveService.etatDesVotes(debatId);
+    const [affirmations, transcription] = await Promise.all([
+      this.liveService.etatDesVotes(debatId),
+      this.liveService.getTranscription(debatId),
+    ]);
     const texteGenereIA = await this.iaService.genererResumeDebat({
       titre: debat.titre,
       thematique: debat.thematique.libelle,
       description: debat.description,
+      transcription,
       affirmations: affirmations.map((a) => ({
         texte: a.texte,
         valides: a.valides,

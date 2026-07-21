@@ -62,6 +62,9 @@ export class MistralIaService implements IaService {
   }
 
   async genererResumeDebat(donnees: DonneesResumeDebat): Promise<string> {
+    const verbatim = donnees.transcription
+      .map((s) => `${s.intervenant} : ${s.texte}`)
+      .join('\n');
     const affirmations = donnees.affirmations
       .map((a) => {
         const total = a.valides + a.invalides;
@@ -73,16 +76,21 @@ export class MistralIaService implements IaService {
       {
         role: 'system',
         content:
-          "Tu es un modérateur de débat citoyen. Tu rédiges des résumés fidèles, neutres et pédagogiques en français, destinés à être publiés pour le grand public. Ne prends pas parti ; rapporte les faits et les résultats des votes.",
+          'Tu résumes fidèlement un débat citoyen pour publication grand public, en français. ' +
+          'RÈGLE ABSOLUE : appuie-toi UNIQUEMENT sur la transcription et les votes fournis. ' +
+          "N'invente AUCUN propos, chiffre, nom ou fait absent de ces données. " +
+          'Si la transcription est vide, ne rapporte que les affirmations soumises au vote et leurs ' +
+          "résultats, sans broder ni imaginer d'échanges. Reste neutre, ne prends pas parti.",
       },
       {
         role: 'user',
         content:
-          `Rédige le résumé (6 à 10 phrases) d'un débat citoyen terminé.\n` +
+          `Rédige le résumé d'un débat citoyen terminé (6 à 10 phrases si la matière le permet, moins sinon).\n` +
           `Titre : ${donnees.titre}\nThématique : ${donnees.thematique}\n` +
           (donnees.description ? `Contexte : ${donnees.description}\n` : '') +
-          `Affirmations soumises au vote de la salle :\n${affirmations || '(aucune)'}\n\n` +
-          `Restitue les points débattus et, pour chaque affirmation, comment la salle l'a jugée.`,
+          `\n--- TRANSCRIPTION (ce qui a été réellement dit) ---\n${verbatim || '(aucune transcription disponible)'}\n` +
+          `\n--- AFFIRMATIONS SOUMISES AU VOTE ---\n${affirmations || '(aucune)'}\n\n` +
+          `Restitue fidèlement les points échangés (d'après la transcription) et, pour chaque affirmation, comment la salle l'a jugée.`,
       },
     ]);
   }

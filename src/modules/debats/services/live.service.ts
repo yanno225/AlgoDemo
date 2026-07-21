@@ -11,6 +11,7 @@ import { AffirmationDebat } from '../entities/affirmation-debat.entity';
 import { Debat } from '../entities/debat.entity';
 import { ParticipationDebat } from '../entities/participation-debat.entity';
 import { SignalementDebat } from '../entities/signalement-debat.entity';
+import { TranscriptionSegment } from '../entities/transcription-segment.entity';
 import { VoteAffirmation } from '../entities/vote-affirmation.entity';
 import {
   RoleParticipation,
@@ -42,7 +43,59 @@ export class LiveService {
     private readonly voteRepo: Repository<VoteAffirmation>,
     @InjectRepository(SignalementDebat)
     private readonly signalementRepo: Repository<SignalementDebat>,
+    @InjectRepository(TranscriptionSegment)
+    private readonly transcriptionRepo: Repository<TranscriptionSegment>,
   ) {}
+
+  /**
+   * Enregistre un segment de transcription (ce qu'un intervenant vient de dire,
+   * converti en texte par son navigateur). Réservé aux intervenants/modérateur
+   * — les spectateurs ne parlent pas.
+   */
+  async enregistrerTranscription(
+    debatId: string,
+    user: AuthUser,
+    texte: string,
+  ): Promise<void> {
+    const propre = (texte ?? '').trim();
+    if (!propre) return;
+
+    const participation = await this.participationRepo.findOne({
+      where: { debat: { id: debatId }, userId: user.id },
+    });
+    if (
+      !participation ||
+      participation.role === RoleParticipation.SPECTATEUR
+    ) {
+      throw new BadRequestException(
+        'Seuls les intervenants et le modérateur alimentent la transcription',
+      );
+    }
+
+    await this.transcriptionRepo.save(
+      this.transcriptionRepo.create({
+        debat: { id: debatId } as Debat,
+        userId: user.id,
+        intervenant: user.email,
+        texte: propre.slice(0, 2000),
+      }),
+    );
+  }
+
+  /** Verbatim complet du débat, dans l'ordre chronologique */
+  getTranscription(
+    debatId: string,
+  ): Promise<{ intervenant: string; texte: string }[]> {
+    return this.transcriptionRepo
+      .find({
+        where: { debat: { id: debatId } },
+        order: { creeLe: 'ASC' },
+        select: { intervenant: true, texte: true },
+      })
+      .then((segments) =>
+        segments.map((s) => ({ intervenant: s.intervenant, texte: s.texte })),
+      );
+  }
 
   /**
    * Rejoindre un débat EN_COURS : enregistre la participation (une seule par

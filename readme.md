@@ -241,11 +241,26 @@ automatiquement au démarrage :
 Pour changer de fournisseur plus tard : écrire une classe implémentant
 `IaService` et l'ajouter à la factory de `src/modules/ia/ia.module.ts`.
 
+## Transcription en direct (verbatim du débat)
+
+Pendant le live, le navigateur des intervenants convertit leur voix en texte
+(reconnaissance vocale, `fr-FR`) et envoie chaque phrase au backend via
+l'événement WebSocket `transcription`. Les segments (attribués à chaque
+intervenant, horodatés) forment le **verbatim** du débat, diffusé en direct à
+la salle (`transcription.maj`) et **stocké** (`transcription_segments`).
+
+C'est cette transcription — ce qui a été réellement **dit** — qui sert de base
+factuelle au résumé IA. Le résumé a l'instruction stricte de ne rien inventer :
+il s'appuie uniquement sur le verbatim et les votes. (Reconnaissance vocale
+disponible sur Chrome ; une transcription serveur plus robuste, type Whisper,
+pourra la remplacer plus tard sans changer le reste.)
+
 ## Résumés post-débat (CDC §6.4 → Feed)
 
-Après un débat **terminé**, le staff génère un résumé (IA) du déroulé et des
-votes, le valide, et il est **publié automatiquement dans le Feed** (événement
-`debat.resume.valide` — dernier contrat inter-équipes).
+Après un débat **terminé**, le staff génère un résumé (IA) basé sur le
+**verbatim** (transcription) et les votes, le valide, et il est **publié
+automatiquement dans le Feed** (événement `debat.resume.valide` — dernier
+contrat inter-équipes).
 
 | Route | Accès | Description |
 |---|---|---|

@@ -99,7 +99,13 @@ const PAGE_HTML = `<!doctype html>
       <div id="controlesStaff" class="ligne cache" style="margin-top:8px">
         <button class="sec" id="btnCam" onclick="basculerCamera()">📷 Caméra</button>
         <button class="sec" id="btnMic" onclick="basculerMicro()">🎤 Micro</button>
+        <button class="sec" id="btnTranscription" onclick="basculerTranscription()">📝 Transcrire</button>
       </div>
+    </div>
+
+    <div class="carte">
+      <h2>📝 Transcription en direct</h2>
+      <div id="transcription" class="muet">La transcription des intervenants apparaîtra ici…</div>
     </div>
 
     <div class="carte">
@@ -183,10 +189,51 @@ function rejoindre(id) {
     if (el('signalements').textContent.indexOf('Aucun') === 0) el('signalements').innerHTML = '';
     el('signalements').innerHTML += '<div><b>' + s.de + '</b> : ' + s.message + '</div>';
   });
+  socket.on('transcription.maj', function (s) {
+    if (el('transcription').textContent.indexOf('apparaîtra') !== -1) el('transcription').innerHTML = '';
+    var ligne = document.createElement('div');
+    ligne.innerHTML = '<b>' + s.intervenant + '</b> : ' + s.texte;
+    el('transcription').appendChild(ligne);
+    el('transcription').scrollTop = el('transcription').scrollHeight;
+  });
   socket.on('debat.cloture', function () {
     el('etatDebat').textContent = '🔴 Le débat est terminé. Merci de votre participation !';
+    arreterTranscription();
     if (salleVideo) salleVideo.disconnect();
   });
+}
+
+// ------- Transcription vocale (intervenants) via le navigateur -------
+
+var reconnaissance = null, transcriptionActive = false;
+
+function basculerTranscription() {
+  if (transcriptionActive) { arreterTranscription(); return; }
+  var Reco = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!Reco) { alert('La reconnaissance vocale n’est pas disponible sur ce navigateur (utilisez Chrome).'); return; }
+  reconnaissance = new Reco();
+  reconnaissance.lang = 'fr-FR';
+  reconnaissance.continuous = true;
+  reconnaissance.interimResults = false;
+  reconnaissance.onresult = function (e) {
+    for (var i = e.resultIndex; i < e.results.length; i++) {
+      if (e.results[i].isFinal) {
+        var texte = e.results[i][0].transcript.trim();
+        if (texte) socket.emit('transcription', { debatId: debatId, texte: texte });
+      }
+    }
+  };
+  reconnaissance.onend = function () { if (transcriptionActive) reconnaissance.start(); }; // relance auto
+  reconnaissance.start();
+  transcriptionActive = true;
+  el('btnTranscription').style.background = '#14532d';
+  el('btnTranscription').textContent = '📝 Transcrire ✓';
+}
+
+function arreterTranscription() {
+  transcriptionActive = false;
+  if (reconnaissance) { try { reconnaissance.stop(); } catch (e) {} }
+  if (el('btnTranscription')) { el('btnTranscription').style.background = '#64748b'; el('btnTranscription').textContent = '📝 Transcrire'; }
 }
 
 // ------- Vidéo LiveKit -------

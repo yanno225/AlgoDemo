@@ -139,6 +139,29 @@ export class DebatsGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
   }
 
+  @SubscribeMessage('transcription')
+  async transcription(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() body: { debatId?: string; texte?: string },
+  ) {
+    const user = client.data.user as AuthUser;
+    try {
+      await this.liveService.enregistrerTranscription(
+        body?.debatId ?? '',
+        user,
+        body?.texte ?? '',
+      );
+      // Diffuse le sous-titre en direct à toute la salle (public compris)
+      this.server.to(`debat:${body!.debatId}`).emit('transcription.maj', {
+        intervenant: user.email,
+        texte: (body?.texte ?? '').trim(),
+      });
+      return { ok: true };
+    } catch (e) {
+      return { ok: false, message: e instanceof Error ? e.message : 'Erreur' };
+    }
+  }
+
   @SubscribeMessage('signaler')
   async signaler(
     @ConnectedSocket() client: Socket,

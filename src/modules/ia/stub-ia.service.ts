@@ -81,6 +81,11 @@ export class StubIaService implements IaService {
     const phrases: string[] = [
       `Résumé du débat « ${donnees.titre} » (thématique : ${donnees.thematique}).`,
     ];
+    if (donnees.transcription.length > 0) {
+      phrases.push(
+        `${donnees.transcription.length} prise(s) de parole transcrite(s).`,
+      );
+    }
     if (donnees.affirmations.length === 0) {
       phrases.push("Aucune affirmation n'a été soumise au vote.");
     }
