@@ -3,6 +3,17 @@ import { ApiExcludeController } from '@nestjs/swagger';
 import { readFileSync } from 'fs';
 
 /**
+ * Bundle du client LiveKit, lu une seule fois au démarrage.
+ * On résout le nom nu du package (require.resolve('livekit-client')) — qui
+ * pointe sur le bundle UMD — plutôt qu'un sous-chemin, bloqué par le champ
+ * "exports" du package (ERR_PACKAGE_PATH_NOT_EXPORTED).
+ */
+const LIVEKIT_CLIENT_JS = readFileSync(
+  require.resolve('livekit-client'),
+  'utf-8',
+);
+
+/**
  * PAGE DE DÉMONSTRATION du live vidéo — outil de TEST (pas le produit final).
  *
  * Usage en salle / à distance : lancer l'API + docker (LiveKit), ouvrir
@@ -26,10 +37,7 @@ export class LiveDemoController {
   @Get('livekit-client.js')
   @Header('content-type', 'application/javascript; charset=utf-8')
   livekitClient(): string {
-    return readFileSync(
-      require.resolve('livekit-client/dist/livekit-client.umd.js'),
-      'utf-8',
-    );
+    return LIVEKIT_CLIENT_JS;
   }
 }
 
