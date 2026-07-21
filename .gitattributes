@@ -1,0 +1,23 @@
+# Normalise les fins de ligne dans le dépôt.
+#
+# L'équipe travaille sous Windows et sous macOS/Linux. Sans cette règle, un
+# même fichier apparaît modifié d'un poste à l'autre uniquement à cause des
+# retours chariot, ce qui pollue les revues de code.
+* text=auto eol=lf
+
+# Fichiers binaires : jamais convertis.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.ttf binary
+*.otf binary
+*.woff binary
+*.woff2 binary
+*.pdf binary
+*.docx binary
+*.xlsm binary
+
+# Les lockfiles sont générés : les masquer dans les diffs de revue.
+package-lock.json linguist-generated=true -diff

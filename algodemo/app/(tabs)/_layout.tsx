@@ -1,0 +1,20 @@
+import React from 'react';
+import { Tabs } from 'expo-router';
+import CustomTabBar from '../../components/navigation/CustomTabBar';
+
+export default function TabsLayout() {
+  return (
+    <Tabs
+      tabBar={(props) => <CustomTabBar {...props} />}
+      screenOptions={{
+        headerShown: false,
+      }}
+    >
+      <Tabs.Screen name="feed" />
+      <Tabs.Screen name="debats" />
+      <Tabs.Screen name="ai" />
+      <Tabs.Screen name="participation" />
+      <Tabs.Screen name="profile" />
+    </Tabs>
+  );
+}

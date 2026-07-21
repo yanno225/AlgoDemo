@@ -1,0 +1,307 @@
+{
+  "common": {
+    "loading": "Chargement...",
+    "error": "Une erreur est survenue",
+    "retry": "Réessayer",
+    "empty": "Aucun contenu disponible",
+    "save": "Enregistrer",
+    "cancel": "Annuler",
+    "next": "Suivant",
+    "back": "Retour",
+    "confirm": "Confirmer",
+    "required": "Ce champ est obligatoire",
+    "official": "Officiel",
+    "read": "Lire",
+    "download": "Télécharger"
+  },
+  "auth": {
+    "brand": {
+      "name": "AlgoDémo",
+      "tagline": "Engagez-vous pour une démocratie éclairée"
+    },
+    "tabs": {
+      "login": "Se connecter",
+      "register": "Créer un compte"
+    },
+    "login": {
+      "title": "Connexion",
+      "subtitle": "Ravi de vous revoir sur AlgoDémo",
+      "welcome": "Content de vous revoir",
+      "emailOrPhone": "Email ou téléphone",
+      "emailOrPhonePlaceholder": "citoyen@email.ci ou +225 07…",
+      "password": "Mot de passe",
+      "passwordPlaceholder": "Votre mot de passe",
+      "submit": "Se connecter",
+      "noAccount": "Pas encore de compte ?",
+      "registerLink": "S'inscrire",
+      "forgotPassword": "Mot de passe oublié ?",
+      "invalidCredentials": "Identifiants incorrects. Vérifiez votre saisie.",
+      "browseWithoutAccount": "Découvrir le fil sans compte"
+    },
+    "register": {
+      "title": "Créer un compte",
+      "subtitle": "Rejoignez la veille citoyenne active",
+      "lastName": "Nom",
+      "lastNamePlaceholder": "Koffi",
+      "firstName": "Prénom",
+      "firstNamePlaceholder": "Kouassi",
+      "age": "Âge",
+      "agePlaceholder": "28",
+      "email": "Adresse email",
+      "phone": "Numéro de téléphone",
+      "password": "Mot de passe",
+      "passwordPlaceholder": "Au moins 8 caractères",
+      "confirmPassword": "Confirmer le mot de passe",
+      "termsAccept": "J'accepte la politique de confidentialité",
+      "termsRequired": "Vous devez accepter la politique de confidentialité pour continuer.",
+      "termsLink": "Lire la politique",
+      "submit": "Créer mon compte",
+      "alreadyAccount": "Vous avez déjà un compte ?",
+      "loginLink": "Se connecter",
+      "ageInvalid": "L'âge doit être valide (minimum 13 ans).",
+      "passwordTooShort": "Le mot de passe doit contenir au moins 8 caractères.",
+      "passwordStrength": {
+        "label": "Robustesse",
+        "weak": "Faible",
+        "medium": "Moyen",
+        "strong": "Robuste"
+      }
+    },
+    "otp": {
+      "title": "Vérification du compte",
+      "subtitle": "Saisissez le code envoyé à",
+      "codeLabel": "Code de validation",
+      "submit": "Vérifier le code",
+      "resend": "Renvoyer le code",
+      "resendIn": "Renvoyer le code dans {{seconds}} s",
+      "resent": "Un nouveau code vient d'être envoyé.",
+      "incomplete": "Saisissez les {{count}} chiffres du code.",
+      "changeDestination": "Modifier le destinataire"
+    }
+  },
+  "thematics": {
+    "genreSociete": "Genre et Société",
+    "jeunesseSociete": "Jeunesse et Société",
+    "droit": "Droit",
+    "politique": "Politique",
+    "societeVivant": "Société et Vivant"
+  },
+  "feed": {
+    "title": "Actualités",
+    "searchPlaceholder": "Rechercher un contenu, un fait...",
+    "greeting": "Bonjour 👋",
+    "subtitle": "Découvrez les dernières informations vérifiées",
+    "verificationLevel": "Niveau de vérification {{level}}",
+    "verifiedLevel": "Vérifié niveau {{level}}",
+    "filterAll": "Tous",
+    "sourceLabel": "Source",
+    "sharedVia": "Partagé via AlgoDémo",
+    "readAudio": "Lire le contenu à haute voix",
+    "downloadOffline": "Télécharger pour accès hors-ligne",
+    "downloaded": "Téléchargé",
+    "actions": {
+      "like": "J'aime ce contenu",
+      "comment": "Voir les commentaires",
+      "share": "Partager le contenu"
+    }
+  },
+  "debats": {
+    "title": "Débats encadrés",
+    "subtitle": "Participez à la délibération collective, animée par des experts certifiés.",
+    "featured": "En vedette",
+    "live": "En direct",
+    "critical": "Débat critique",
+    "speakers": "Intervenants",
+    "viewers": "{{value}} spectateurs",
+    "join": "Rejoindre le direct",
+    "historyTitle": "Historique et résumés",
+    "aiSummary": "Résumé IA validé",
+    "listen": "Écouter",
+    "upcomingTitle": "Prochainement",
+    "upcoming": "À venir",
+    "openCalendar": "Ouvrir le calendrier",
+    "remindMe": "Me le rappeler"
+  },
+  "liveRoom": {
+    "back": "Retour aux débats",
+    "live": "En direct",
+    "elapsed": "Durée",
+    "moderator": "Modérateur",
+    "certifiedSpeakers": "Intervenants certifiés",
+    "livePoll": "Sondage en direct",
+    "vote": "Voter",
+    "voted": "Merci pour votre participation",
+    "results": "Résultats en direct",
+    "chatTitle": "Fil de discussion",
+    "messageCount": "{{count}} messages",
+    "messagePlaceholder": "Ajouter un commentaire…",
+    "send": "Envoyer le message",
+    "certified": "Certifié",
+    "you": "Vous",
+    "reportLive": "Signaler ce direct"
+  },
+  "profile": {
+    "memberSince": "Citoyen engagé depuis {{year}}",
+    "editPhoto": "Changer la photo de profil",
+    "openSettings": "Ouvrir les paramètres",
+    "contributions": "Contributions",
+    "reliability": "Fiabilité",
+    "badgesTitle": "Mes badges",
+    "seeAll": "Voir tout",
+    "activityTitle": "Activité citoyenne",
+    "accessibilityTitle": "Accessibilité",
+    "logout": "Se déconnecter",
+    "logoutConfirm": {
+      "title": "Se déconnecter ?",
+      "message": "Vos contributions sont en sécurité. Si vous avez rédigé des signalements hors-ligne, ils seront automatiquement synchronisés avant votre déconnexion.",
+      "cancel": "Annuler",
+      "confirm": "Se déconnecter"
+    },
+    "guestTitle": "Vous n'êtes pas connecté",
+    "guestSubtitle": "Connectez-vous pour voter, contribuer et suivre votre engagement.",
+    "guestAction": "Se connecter",
+    "badges": {
+      "pioneer": "Pionnier",
+      "moderator": "Modérateur",
+      "verifier": "Vérificateur",
+      "expert": "Expert",
+      "locked": "À débloquer"
+    },
+    "activity": {
+      "votes": "Votes validés",
+      "watch": "Veille juridique",
+      "lives": "Présence aux lives"
+    },
+    "accessibility": {
+      "fontSize": "Taille du texte",
+      "fontSizeDesc": "Ajuste l'affichage des textes de l'application",
+      "contrast": "Contrastes renforcés",
+      "contrastDesc": "Optimise l'affichage pour la déficience visuelle (WCAG)",
+      "tts": "Synthèse vocale automatique",
+      "ttsDesc": "Lit les contenus textuels dès leur ouverture",
+      "hitSlop": "Zones tactiles élargies",
+      "hitSlopDesc": "Agrandit la surface sensible des éléments interactifs",
+      "decrease": "Diminuer la taille du texte",
+      "increase": "Augmenter la taille du texte"
+    }
+  },
+  "settings": {
+    "title": "Paramètres",
+    "search": "Rechercher un paramètre",
+    "comingSoon": "Bientôt disponible",
+    "sections": {
+      "privacy": "Confidentialité",
+      "security": "Sécurité et données",
+      "notifications": "Notifications et contenu",
+      "storage": "Stockage et activité"
+    },
+    "items": {
+      "privacyPolicy": "Politique de confidentialité",
+      "privacyCenter": "Centre de confidentialité",
+      "accountPrivacy": "Confidentialité du compte",
+      "anonymisation": "Anonymisation des contributions",
+      "accountSecurity": "Sécurité du compte",
+      "myData": "Mes données (export et suppression)",
+      "notifications": "Notifications",
+      "contentPreferences": "Préférences de contenu",
+      "interests": "Centres d'intérêt",
+      "downloads": "Téléchargements",
+      "activityHistory": "Historique des activités",
+      "devicePermissions": "Autorisations de l'appareil"
+    }
+  },
+  "ai": {
+    "title": "Assistant IA",
+    "badge": "En réétude",
+    "subtitle": "Le module d'aide à la vérification est en cours de conception avec le comité scientifique.",
+    "notice": "Ce module est hors périmètre de la version 1. Il sera activé après validation du comité de pilotage."
+  },
+  "participation": {
+    "title": "Participation citoyenne",
+    "subtitle": "Contribuez aux décisions publiques : donnez votre avis et signalez ce qui doit être corrigé.",
+    "tabs": {
+      "sondages": "Sondages",
+      "consultations": "Consultations",
+      "signalements": "Signalements"
+    },
+    "status": {
+      "open": "Ouvert",
+      "closed": "Clôturé",
+      "inProgress": "En cours",
+      "resolved": "Résolu",
+      "closesOn": "Clôture le {{date}}",
+      "daysLeft": "J-{{count}} avant clôture"
+    },
+    "sondages": {
+      "vote": "Voter",
+      "voted": "Vous avez voté",
+      "voteClosed": "Scrutin clos",
+      "modalTitle": "Sondage citoyen",
+      "submitVote": "Valider mon vote",
+      "anonymousNotice": "Votre vote est anonyme et ne peut être modifié.",
+      "empty": "Aucun sondage ouvert pour le moment."
+    },
+    "consultations": {
+      "consultProject": "Consulter le projet",
+      "giveOpinion": "Donner mon avis",
+      "opinionTitle": "Donner mon avis",
+      "opinionLabel": "Votre contribution",
+      "opinionPlaceholder": "Exposez votre avis de manière argumentée et constructive…",
+      "submitOpinion": "Soumettre ma contribution",
+      "participation": "Participation citoyenne",
+      "quorum": "Objectif de quorum",
+      "contributions": "Contributions",
+      "workshopsTitle": "Ateliers locaux",
+      "workshopsSubtitle": "Découvrez les rencontres près de chez vous.",
+      "empty": "Aucune consultation en cours."
+    },
+    "signalements": {
+      "formTitle": "Nouveau signalement",
+      "formSubtitle": "Décrivez les faits avec précision : votre signalement est transmis à la commune.",
+      "category": "Catégorie",
+      "categoryHint": "Choisissez le type d'incident",
+      "description": "Description",
+      "descriptionPlaceholder": "Décrivez les faits de manière précise et objective…",
+      "location": "Localisation",
+      "locationPlaceholder": "Adresse ou point de repère",
+      "useMyPosition": "Utiliser ma position",
+      "pickOnMap": "Choisir sur la carte",
+      "photo": "Photo",
+      "photoOptional": "facultatif",
+      "addPhoto": "Ajouter une photo",
+      "changePhoto": "Changer la photo",
+      "removePhoto": "Retirer la photo",
+      "submit": "Envoyer le signalement",
+      "missingFields": "Renseignez la catégorie, la description et la localisation.",
+      "sent": "Signalement transmis à votre commune.",
+      "recentTitle": "Récents dans votre commune",
+      "seeAll": "Tout voir",
+      "empty": "Aucun signalement récent dans votre commune.",
+      "supportCount": "{{count}} appuis",
+      "categories": {
+        "road": "Voirie",
+        "lighting": "Éclairage",
+        "waste": "Déchets",
+        "water": "Eau",
+        "safety": "Sécurité",
+        "misinformation": "Désinformation",
+        "other": "Autre"
+      },
+      "actions": {
+        "support": "Appuyer ce signalement",
+        "comment": "Commenter",
+        "share": "Partager"
+      }
+    }
+  },
+  "consultations": {
+    "title": "Consultations",
+    "vote": "Voter",
+    "voted": "Voté !",
+    "alreadyVoted": "Vous avez déjà voté pour cette consultation",
+    "closed": "Clôturée",
+    "votesCount": "{{count}} votes",
+    "results": "Résultats publics",
+    "anonymousNotice": "Votre vote est anonyme et sécurisé."
+  }
+}

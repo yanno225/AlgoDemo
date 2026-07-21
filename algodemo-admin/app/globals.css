@@ -1,0 +1,211 @@
+@import "tailwindcss";
+
+/**
+ * Design system AlgoDémo — back-office.
+ *
+ * Les valeurs sont reprises telles quelles de `algodemo/constants/theme.ts`
+ * (l'application mobile). Toute évolution de la charte doit être répercutée
+ * dans les deux fichiers : ce sont les deux seules sources de vérité.
+ */
+@theme {
+  /* ─── Marque ─────────────────────────────────────────────────── */
+  --color-primary: #2d4a22;
+  --color-primary-medium: #3a6b2a;
+  --color-primary-light: #4a8c3a;
+  --color-primary-pale: #e8f5e4;
+
+  --color-secondary: #c9952b;
+  --color-secondary-light: #d4ad4b;
+  --color-secondary-pale: #fdf5e6;
+
+  /* ─── Surfaces ───────────────────────────────────────────────── */
+  --color-canvas: #f0ebe0;
+  --color-surface: #ffffff;
+  --color-surface-raised: #faf8f3;
+  --color-line: #e0d8cc;
+  --color-line-soft: #ede5d8;
+  /* Filet quasi imperceptible qui donne un bord aux cartes. Sur fond crème,
+     l'ombre seule ne suffit pas à détacher une surface blanche. */
+  --color-hairline: rgba(45, 74, 34, 0.07);
+
+  /* ─── Colonne de navigation ──────────────────────────────────── */
+  --color-rail: #24391c;
+  --color-rail-raised: #2d4a22;
+  --color-rail-ink: #ffffff;
+  --color-rail-ink-muted: rgba(255, 255, 255, 0.62);
+  --color-rail-line: rgba(255, 255, 255, 0.1);
+
+  /* ─── Textes ─────────────────────────────────────────────────── */
+  --color-ink: #1b1b1e;
+  --color-ink-muted: #6c6c70;
+  --color-ink-subtle: #9c9ca0;
+  --color-ink-inverse: #ffffff;
+
+  /* ─── Statuts ────────────────────────────────────────────────── */
+  --color-success: #2d8b4e;
+  --color-warning: #c9952b;
+  --color-danger: #c93c3c;
+  --color-danger-pale: #fdeaea;
+  --color-info: #2a7fba;
+
+  /* ─── Rayons ─────────────────────────────────────────────────── */
+  --radius-xs: 4px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+  --radius-2xl: 24px;
+
+  /* ─── Ombres — teintées de vert, jamais de gris neutre ─────────
+     Deux couches : un contact court qui pose l'objet sur le fond, une
+     diffusion large qui crée la profondeur. Une ombre unique et molle
+     disparaît sur un fond crème. */
+  --shadow-sm: 0 1px 2px rgba(45, 74, 34, 0.05), 0 4px 16px rgba(45, 74, 34, 0.06);
+  --shadow-md: 0 2px 4px rgba(45, 74, 34, 0.06), 0 10px 28px rgba(45, 74, 34, 0.1);
+  --shadow-lg: 0 4px 8px rgba(45, 74, 34, 0.08), 0 20px 48px rgba(45, 74, 34, 0.14);
+  --shadow-rail: 4px 0 24px rgba(36, 57, 28, 0.18);
+
+  /* ─── Mouvement ──────────────────────────────────────────────── */
+  --ease-out-soft: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-spring: cubic-bezier(0.34, 1.4, 0.64, 1);
+}
+
+/* Les polices sont injectées par next/font : elles doivent être résolues
+   à l'exécution, d'où `inline`.
+
+   Le back-office diverge volontairement de l'application mobile (Plus Jakarta
+   Sans + Inter) : il s'adresse à des opérateurs institutionnels, pas à des
+   citoyens. Les couleurs, rayons et ombres, eux, restent strictement communs
+   aux deux produits. */
+@theme inline {
+  --font-heading: var(--font-serif);
+  --font-sans: var(--font-ui);
+  --font-mono: var(--font-code);
+}
+
+/**
+ * Couleurs des 5 thématiques fixes (RG-THE-01).
+ *
+ * Déclarées hors de `@theme` volontairement : Tailwind v4 n'émet une variable
+ * de thème que si une classe utilitaire la consomme. Or ces couleurs sont
+ * appliquées dynamiquement — `style={{ color: var(--color-politique) }}` —
+ * car la thématique n'est connue qu'à l'exécution. Placées dans `@theme`,
+ * elles étaient purement et simplement supprimées du CSS produit, et les
+ * liserés devenaient invisibles.
+ */
+:root {
+  --color-genre: #8b5cf6;
+  --color-jeunesse: #f59e0b;
+  --color-droit: #2d4a22;
+  --color-politique: #3b82f6;
+  --color-vivant: #10b981;
+}
+
+@layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+  }
+
+  body {
+    background-color: var(--color-canvas);
+    color: var(--color-ink);
+    font-family: var(--font-sans), system-ui, sans-serif;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  .font-heading {
+    font-family: var(--font-heading), Georgia, serif;
+    /* Un serif composé large paraît mou : on resserre, et on laisse
+       l'axe optique de Fraunces gérer le reste. */
+    letter-spacing: -0.015em;
+    font-variation-settings: "SOFT" 20, "WONK" 0;
+  }
+
+  code,
+  kbd,
+  samp,
+  .font-mono {
+    font-family: var(--font-mono), ui-monospace, monospace;
+  }
+
+  /* Cible de focus visible au clavier — obligation d'accessibilité, et
+     seul repère de navigation pour qui n'utilise pas de souris. */
+  :focus-visible {
+    outline: 2px solid var(--color-primary-medium);
+    outline-offset: 2px;
+    border-radius: var(--radius-xs);
+  }
+}
+
+@layer utilities {
+  /* Animation d'entrée partagée : même intention que `enterListItem` côté
+     mobile — fondu accompagné d'une courte montée. */
+  @keyframes rise-in {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  .animate-rise {
+    animation: rise-in 320ms var(--ease-out-soft) both;
+  }
+
+  /* Remplissage d'une jauge depuis zéro. La cible est passée en variable
+     CSS, ce qui évite d'avoir à monter un composant client juste pour
+     animer une largeur. */
+  @keyframes fill-bar {
+    from {
+      width: 0;
+    }
+    to {
+      width: var(--fill);
+    }
+  }
+
+  .animate-fill {
+    animation: fill-bar 900ms var(--ease-out-soft) both;
+    width: var(--fill);
+  }
+
+  /* Tracé d'un anneau ou d'une courbe SVG. */
+  @keyframes draw-stroke {
+    from {
+      stroke-dashoffset: var(--dash);
+    }
+    to {
+      stroke-dashoffset: var(--dash-target);
+    }
+  }
+
+  .animate-draw {
+    animation: draw-stroke 1000ms var(--ease-out-soft) both;
+  }
+
+  /* Chiffres alignés en colonne : indispensable dès qu'on empile des
+     valeurs, sinon les colonnes dansent d'une ligne à l'autre. */
+  .tabular {
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.02em;
+  }
+}
+
+/* Respecte le réglage système « réduire les animations ». Sans cette règle,
+   l'interface reste inconfortable pour les personnes sujettes au vertige. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

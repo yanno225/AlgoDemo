@@ -1,0 +1,63 @@
+# ─── Dépendances ────────────────────────────────────────────────────
+node_modules/
+.pnp
+.pnp.*
+
+# ─── Sorties de compilation ─────────────────────────────────────────
+# Next.js
+.next/
+out/
+build/
+next-env.d.ts
+
+# Expo — caches locaux, régénérés à chaque lancement
+.expo/
+.expo-shared/
+dist/
+web-build/
+expo-env.d.ts
+
+# ─── Natif ──────────────────────────────────────────────────────────
+# Générés par `expo prebuild`, jamais versionnés dans un projet managé
+/algodemo/android/
+/algodemo/ios/
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.orig.*
+
+# ─── Environnement ──────────────────────────────────────────────────
+# Aucune clé, aucun jeton ne doit rejoindre le dépôt
+.env
+.env.*
+!.env.example
+
+# ─── Journaux ───────────────────────────────────────────────────────
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ─── Outils et système ──────────────────────────────────────────────
+.vercel
+.DS_Store
+Thumbs.db
+*.tsbuildinfo
+
+# ─── Documents de pilotage ──────────────────────────────────────────
+# Cahier des charges et backlog : diffusés par les canaux du projet,
+# pas par le dépôt de code.
+*.docx
+*.xlsm
+
+# ─── Règles d'assistants IA ─────────────────────────────────────────
+.agents/
+algodemo-antigravity-rules-workflows/
+algodemo-antigravity-rules-workflows*/
+
+# ─── Lockfile résiduel à la racine ──────────────────────────────────
+# Chaque projet porte le sien ; celui-ci est un vestige vide qui fausse
+# la détection de racine par Turbopack.
+/package-lock.json
