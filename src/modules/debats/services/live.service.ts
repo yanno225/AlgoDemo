@@ -89,6 +89,18 @@ export class LiveService {
     return { debat, roleParticipation };
   }
 
+  /** Débat avec sa thématique (utilisé pour la génération du résumé) */
+  async getDebatComplet(debatId: string): Promise<Debat> {
+    const debat = await this.debatRepo.findOne({
+      where: { id: debatId },
+      relations: { thematique: true },
+    });
+    if (!debat) {
+      throw new NotFoundException(`Débat ${debatId} introuvable`);
+    }
+    return debat;
+  }
+
   /** Affirmations ouvertes du débat, avec leur décompte courant */
   async etatDesVotes(debatId: string): Promise<
     {

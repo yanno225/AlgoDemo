@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import {
+  DonneesResumeDebat,
   DonneesSynthese,
   IaService,
   IndicateurConnu,
@@ -71,6 +72,33 @@ export class StubIaService implements IaService {
     // Collecte (scraping) et l'implémentation Anthropic.
     this.logger.warn('extraireValeurs STUB appelé — aucune extraction réelle');
     return Promise.resolve([]);
+  }
+
+  genererResumeDebat(donnees: DonneesResumeDebat): Promise<string> {
+    this.logger.warn(
+      `Génération STUB (sans IA réelle) — résumé du débat « ${donnees.titre} »`,
+    );
+    const phrases: string[] = [
+      `Résumé du débat « ${donnees.titre} » (thématique : ${donnees.thematique}).`,
+    ];
+    if (donnees.affirmations.length === 0) {
+      phrases.push("Aucune affirmation n'a été soumise au vote.");
+    }
+    for (const a of donnees.affirmations) {
+      const total = a.valides + a.invalides;
+      const pct = total ? Math.round((100 * a.valides) / total) : 0;
+      const verdict =
+        total === 0
+          ? 'sans vote'
+          : a.valides > a.invalides
+            ? `jugée plutôt vraie (${pct}% de votes favorables)`
+            : `jugée plutôt fausse (${100 - pct}% de votes défavorables)`;
+      phrases.push(`« ${a.texte} » — ${verdict}.`);
+    }
+    phrases.push(
+      '[Texte généré par le service de démonstration — la rédaction par IA sera branchée ultérieurement.]',
+    );
+    return Promise.resolve(phrases.join(' '));
   }
 
   /** "2024-01-01" → "2024" */

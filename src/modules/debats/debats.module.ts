@@ -1,18 +1,21 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { User } from '../auth/entities/user.entity';
+import { IaModule } from '../ia/ia.module';
 import { ReferentielModule } from '../referentiel/referentiel.module';
 import { DebatsController } from './controllers/debats.controller';
 import { LiveDemoController } from './controllers/live-demo.controller';
 import { AffirmationDebat } from './entities/affirmation-debat.entity';
 import { Debat } from './entities/debat.entity';
 import { ParticipationDebat } from './entities/participation-debat.entity';
+import { ResumeDebat } from './entities/resume-debat.entity';
 import { SignalementDebat } from './entities/signalement-debat.entity';
 import { VoteAffirmation } from './entities/vote-affirmation.entity';
 import { DebatsGateway } from './gateway/debats.gateway';
 import { DebatsService } from './services/debats.service';
 import { LiveService } from './services/live.service';
 import { LivekitService } from './services/livekit.service';
+import { ResumesService } from './services/resumes.service';
 
 /**
  * Module Débats & Lives Encadrés (CDC §6.4) — priorité v1, Dev B.
@@ -29,13 +32,22 @@ import { LivekitService } from './services/livekit.service';
       AffirmationDebat,
       VoteAffirmation,
       SignalementDebat,
+      ResumeDebat,
       User, // lecture seule : validation du modérateur désigné
     ]),
     // Repositories Thematique (rattachement des débats)
     ReferentielModule,
+    // Service IA partagé (génération des résumés)
+    IaModule,
   ],
   controllers: [DebatsController, LiveDemoController],
-  providers: [DebatsService, LiveService, DebatsGateway, LivekitService],
+  providers: [
+    DebatsService,
+    LiveService,
+    DebatsGateway,
+    LivekitService,
+    ResumesService,
+  ],
   exports: [TypeOrmModule],
 })
 export class DebatsModule {}

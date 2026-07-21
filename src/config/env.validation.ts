@@ -104,6 +104,15 @@ class EnvironmentVariables {
   @IsOptional()
   @IsString()
   LIVEKIT_API_SECRET?: string;
+
+  // Service IA (Mistral AI). Sans clé, le service bascule sur le stub (dev).
+  @IsOptional()
+  @IsString()
+  MISTRAL_API_KEY?: string;
+
+  @IsOptional()
+  @IsString()
+  MISTRAL_MODEL: string = 'mistral-small-latest';
 }
 
 export function validateEnv(

@@ -4,8 +4,9 @@
  * Cette interface est DÉFINITIVE : elle sera consommée par la Fiche-pays
  * (synthèses), les Résumés de débats et le futur module Collecte (extraction
  * des valeurs depuis les textes scrapés). Seule l'implémentation changera :
- *  - aujourd'hui : StubIaService (texte mécanique, aucune dépendance externe)
- *  - demain     : AnthropicIaService (appels réels à Claude via ANTHROPIC_API_KEY)
+ *  - StubIaService    : texte mécanique, aucune dépendance externe (repli/dev)
+ *  - MistralIaService : appels réels à Mistral AI (MISTRAL_API_KEY)
+ * Le choix se fait dans ia.module.ts selon la présence de la clé.
  */
 
 /** Jeton d'injection NestJS : @Inject(IA_SERVICE) */
@@ -37,6 +38,19 @@ export interface PropositionValeur {
   source: string;
 }
 
+/** Données transmises à l'IA pour rédiger le résumé d'un débat terminé */
+export interface DonneesResumeDebat {
+  titre: string;
+  thematique: string;
+  description?: string | null;
+  /** Affirmations soumises au vote pendant le live, avec leurs décomptes */
+  affirmations: {
+    texte: string;
+    valides: number;
+    invalides: number;
+  }[];
+}
+
 export interface IaService {
   /**
    * Rédige la synthèse d'une thématique pour un pays à partir des valeurs
@@ -54,4 +68,11 @@ export interface IaService {
     texteBrut: string,
     indicateursConnus: IndicateurConnu[],
   ): Promise<PropositionValeur[]>;
+
+  /**
+   * Rédige le résumé d'un débat terminé (CDC §6.4) à partir de son déroulé et
+   * des résultats de vote. Brouillon soumis à validation humaine avant
+   * publication dans le Feed.
+   */
+  genererResumeDebat(donnees: DonneesResumeDebat): Promise<string>;
 }

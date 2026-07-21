@@ -27,14 +27,20 @@ import { CreateDebatDto } from '../dto/create-debat.dto';
 import { CreerAffirmationDto } from '../dto/creer-affirmation.dto';
 import { DefinirReplayDto } from '../dto/definir-replay.dto';
 import { UpdateDebatDto } from '../dto/update-debat.dto';
+import { ValiderResumeDto } from '../dto/valider-resume.dto';
+import { StatutResume } from '../enums/statut-resume.enum';
 import { DebatsService } from '../services/debats.service';
+import { ResumesService } from '../services/resumes.service';
 
 @ApiTags('Débats & Lives')
 @ApiBearerAuth() // JWT requis pour la gestion (POINT_FOCAL/ADMIN) — lectures publiques
 @Controller('debats')
 @UseGuards(RolesGuard)
 export class DebatsController {
-  constructor(private readonly debatsService: DebatsService) {}
+  constructor(
+    private readonly debatsService: DebatsService,
+    private readonly resumesService: ResumesService,
+  ) {}
 
   @Get()
   @ApiOperation({ summary: 'Lister les débats (public)' })
@@ -141,6 +147,58 @@ export class DebatsController {
     @Param('affirmationId', ParseUUIDPipe) affirmationId: string,
   ) {
     return this.debatsService.fermerAffirmation(affirmationId);
+  }
+
+  // ------- Résumés post-débat (IA + validation → Feed) -------
+
+  @Post(':id/resume/generer')
+  @Roles(Role.POINT_FOCAL, Role.ADMIN)
+  @ApiOperation({
+    summary:
+      "Générer (IA) le résumé d'un débat terminé — statut EN_ATTENTE_VALIDATION",
+  })
+  genererResume(@Param('id', ParseUUIDPipe) id: string) {
+    return this.resumesService.generer(id);
+  }
+
+  @Get('resumes/liste')
+  @Roles(Role.POINT_FOCAL, Role.ADMIN)
+  @ApiOperation({ summary: 'File de validation des résumés' })
+  @ApiQuery({ name: 'debatId', required: false })
+  @ApiQuery({ name: 'statut', required: false, enum: StatutResume })
+  listerResumes(
+    @Query('debatId') debatId?: string,
+    @Query('statut') statut?: StatutResume,
+  ) {
+    return this.resumesService.findAll(debatId, statut);
+  }
+
+  @Get('resumes/:resumeId')
+  @Roles(Role.POINT_FOCAL, Role.ADMIN)
+  @ApiOperation({ summary: "Détail d'un résumé (brouillon IA + version finale)" })
+  detailResume(@Param('resumeId', ParseUUIDPipe) resumeId: string) {
+    return this.resumesService.findOne(resumeId);
+  }
+
+  @Patch('resumes/:resumeId/valider')
+  @Roles(Role.POINT_FOCAL, Role.ADMIN)
+  @ApiOperation({
+    summary:
+      'Valider le résumé (texteCorrige facultatif) → publication automatique au Feed (debat.resume.valide)',
+  })
+  validerResume(
+    @Param('resumeId', ParseUUIDPipe) resumeId: string,
+    @Body() dto: ValiderResumeDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.resumesService.valider(resumeId, dto, user);
+  }
+
+  @Patch('resumes/:resumeId/rejeter')
+  @Roles(Role.POINT_FOCAL, Role.ADMIN)
+  @ApiOperation({ summary: 'Rejeter un résumé (conservé pour traçabilité)' })
+  rejeterResume(@Param('resumeId', ParseUUIDPipe) resumeId: string) {
+    return this.resumesService.rejeter(resumeId);
   }
 
   // ------- Signalements en direct (modération) -------

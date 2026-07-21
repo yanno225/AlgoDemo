@@ -227,6 +227,34 @@ Le seed insère le **référentiel officiel complet** (86 indicateurs des atelie
 ESATIC) et des **valeurs de démonstration** pour la Côte d'Ivoire (14 valeurs,
 source marquée « à remplacer »).
 
+## Service IA (Mistral AI, avec repli stub)
+
+Les générations de texte (synthèses fiche-pays, résumés de débats) passent par
+un service IA partagé (`src/modules/ia`). Le fournisseur est choisi
+automatiquement au démarrage :
+
+- **`MISTRAL_API_KEY` renseignée** → Mistral AI (entreprise française, serveurs
+  européens — cohérent RGPD). Clé gratuite sur https://console.mistral.ai.
+- **sans clé** → stub (texte mécanique de démonstration), pour développer
+  hors-ligne. Le log au démarrage indique lequel est actif.
+
+Pour changer de fournisseur plus tard : écrire une classe implémentant
+`IaService` et l'ajouter à la factory de `src/modules/ia/ia.module.ts`.
+
+## Résumés post-débat (CDC §6.4 → Feed)
+
+Après un débat **terminé**, le staff génère un résumé (IA) du déroulé et des
+votes, le valide, et il est **publié automatiquement dans le Feed** (événement
+`debat.resume.valide` — dernier contrat inter-équipes).
+
+| Route | Accès | Description |
+|---|---|---|
+| `POST /debats/:id/resume/generer` | `POINT_FOCAL`/`ADMIN` | Génère le résumé (débat terminé) |
+| `GET /debats/resumes/liste?debatId=&statut=` | `POINT_FOCAL`/`ADMIN` | File de validation |
+| `GET /debats/resumes/:resumeId` | `POINT_FOCAL`/`ADMIN` | Détail (brouillon IA + version finale) |
+| `PATCH /debats/resumes/:resumeId/valider` | `POINT_FOCAL`/`ADMIN` | Publie (texteCorrige facultatif) → émet `debat.resume.valide` |
+| `PATCH /debats/resumes/:resumeId/rejeter` | `POINT_FOCAL`/`ADMIN` | Rejette (traçabilité) |
+
 ## Synthèses IA — ⚠️ génération provisoire (stub)
 
 Chaque thématique de la fiche-pays peut recevoir une **synthèse rédigée**,
