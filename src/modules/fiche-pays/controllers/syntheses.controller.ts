@@ -10,7 +10,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import {
-  ApiHeader,
+  ApiBearerAuth,
   ApiOperation,
   ApiQuery,
   ApiTags,
@@ -29,11 +29,7 @@ import { SynthesesService } from '../services/syntheses.service';
  * Le public, lui, ne voit les synthèses publiées que via GET /fiche-pays/{pays}.
  */
 @ApiTags('Fiche-pays — Synthèses IA')
-@ApiHeader({
-  name: 'X-Debug-Role',
-  description: 'PROVISOIRE : ADMIN requis — remplacé à terme par le JWT',
-  required: true,
-})
+@ApiBearerAuth() // JWT ADMIN requis sur toutes les routes
 @Controller('syntheses')
 @UseGuards(RolesGuard)
 @Roles(Role.ADMIN)

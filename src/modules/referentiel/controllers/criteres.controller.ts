@@ -11,7 +11,7 @@ import {
   Post,
   UseGuards,
 } from '@nestjs/common';
-import { ApiHeader, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Roles } from '../../../common/decorators/roles.decorator';
 import { Role } from '../../../common/enums/role.enum';
 import { RolesGuard } from '../../../common/guards/roles.guard';
@@ -20,12 +20,7 @@ import { UpdateCritereDto } from '../dto/update-critere.dto';
 import { CriteresService } from '../services/criteres.service';
 
 @ApiTags('Référentiel — Critères')
-@ApiHeader({
-  name: 'X-Debug-Role',
-  description:
-    'PROVISOIRE : rôle simulé (ADMIN requis pour POST/PATCH/DELETE) — remplacé à terme par le JWT',
-  required: false,
-})
+@ApiBearerAuth() // requis pour POST/PATCH/DELETE (ADMIN) — sans effet sur les routes GET, publiques
 @Controller('criteres')
 @UseGuards(RolesGuard)
 export class CriteresController {

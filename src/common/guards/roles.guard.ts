@@ -6,32 +6,31 @@ import {
   Logger,
   UnauthorizedException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { JwtService } from '@nestjs/jwt';
 import { Reflector } from '@nestjs/core';
 import { Request } from 'express';
 import { ROLES_KEY } from '../decorators/roles.decorator';
 import { Role } from '../enums/role.enum';
+import { AuthUser } from '../interfaces/auth-user.interface';
 
 /**
- * ⚠️⚠️⚠️ GUARD PROVISOIRE — À REMPLACER PAR LE GUARD JWT (Dev A) ⚠️⚠️⚠️
+ * Guard RBAC — vérifie le JWT d'accès et applique le contrôle de rôle (CDC §9.3).
  *
- * En attendant le module Auth réel, ce guard lit le rôle depuis l'en-tête
- * HTTP "X-Debug-Role" afin de pouvoir développer et tester les routes
- * protégées (ex. CRUD admin du référentiel).
- *
- *   Exemple : curl -X POST ... -H "X-Debug-Role: ADMIN"
- *
- * Contrat à respecter lors du remplacement (pour ne PAS toucher aux contrôleurs) :
- *  - lire les rôles requis via la métadonnée ROLES_KEY (décorateur @Roles) ;
+ * Contrat (inchangé depuis la version provisoire, pour ne toucher à aucun contrôleur) :
+ *  - lit les rôles requis via la métadonnée ROLES_KEY (décorateur @Roles) ;
  *  - une route sans @Roles reste publique ;
- *  - déposer l'utilisateur authentifié sur request.user ({ role: Role, ... }).
- *
- * ⛔ NE JAMAIS DÉPLOYER CE GUARD EN PRODUCTION.
+ *  - dépose l'utilisateur authentifié sur request.user ({ id, email, role }).
  */
 @Injectable()
 export class RolesGuard implements CanActivate {
   private readonly logger = new Logger(RolesGuard.name);
 
-  constructor(private readonly reflector: Reflector) {}
+  constructor(
+    private readonly reflector: Reflector,
+    private readonly jwtService: JwtService,
+    private readonly configService: ConfigService,
+  ) {}
 
   canActivate(context: ExecutionContext): boolean {
     const requiredRoles = this.reflector.getAllAndOverride<Role[] | undefined>(
@@ -45,31 +44,46 @@ export class RolesGuard implements CanActivate {
     }
 
     const request = context.switchToHttp().getRequest<Request>();
-    const debugRole = request.headers['x-debug-role'];
+    const token = this.extraireToken(request);
 
-    if (!debugRole || Array.isArray(debugRole)) {
-      throw new UnauthorizedException(
-        "En-tête X-Debug-Role manquant (guard provisoire — sera remplacé par l'authentification JWT)",
-      );
+    if (!token) {
+      throw new UnauthorizedException('Authentification requise (en-tête Authorization: Bearer <token>)');
     }
 
-    if (!Object.values(Role).includes(debugRole as Role)) {
-      throw new ForbiddenException(
-        `Rôle inconnu "${debugRole}". Valeurs acceptées : ${Object.values(Role).join(', ')}`,
-      );
+    let payload: { sub: string; email: string; role: Role };
+    try {
+      payload = this.jwtService.verify(token, {
+        secret: this.configService.get<string>('JWT_ACCESS_SECRET'),
+      });
+    } catch {
+      throw new UnauthorizedException('Token invalide ou expiré');
     }
 
-    // Simule le request.user que déposera le futur guard JWT
-    (request as Request & { user: { role: Role } }).user = {
-      role: debugRole as Role,
+    if (!Object.values(Role).includes(payload.role)) {
+      throw new ForbiddenException(`Rôle inconnu "${payload.role}"`);
+    }
+
+    (request as Request & { user: AuthUser }).user = {
+      id: payload.sub,
+      email: payload.email,
+      role: payload.role,
     };
 
-    const autorise = requiredRoles.includes(debugRole as Role);
+    const autorise = requiredRoles.includes(payload.role);
     if (!autorise) {
       this.logger.warn(
-        `Accès refusé : rôle ${debugRole} — requis : ${requiredRoles.join(', ')}`,
+        `Accès refusé : rôle ${payload.role} — requis : ${requiredRoles.join(', ')}`,
       );
     }
     return autorise;
+  }
+
+  private extraireToken(request: Request): string | undefined {
+    const header = request.headers.authorization;
+    if (!header || Array.isArray(header)) {
+      return undefined;
+    }
+    const [type, token] = header.split(' ');
+    return type === 'Bearer' ? token : undefined;
   }
 }

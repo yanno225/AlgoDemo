@@ -28,11 +28,18 @@ async function bootstrap(): Promise<void> {
     .setTitle('AlgoDémo API')
     .setDescription(
       "API backend de l'application de veille citoyenne AlgoDémo. " +
-        "⚠️ Authentification provisoire : renseigner l'en-tête X-Debug-Role " +
-        '(UTILISATEUR | POINT_FOCAL | ADMIN) sur les routes protégées, ' +
-        "en attendant l'authentification JWT.",
+        "Authentification par JWT : obtenir un access token via POST /auth/login, " +
+        "puis renseigner l'en-tête Authorization: Bearer <token> sur les routes protégées.",
     )
     .setVersion('0.1.0')
+    .addBearerAuth()
+    .addTag('Auth')
+    .addTag('Auth — Administration des comptes')
+    .addTag('Feed')
+    .addTag('Consultations')
+    .addTag('Avis')
+    .addTag('Notifications')
+    .addTag('Back-office')
     .addTag('Référentiel — Thématiques')
     .addTag('Référentiel — Critères')
     .addTag('Référentiel — Indicateurs')

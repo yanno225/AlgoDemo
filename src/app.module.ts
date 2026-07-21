@@ -1,9 +1,15 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { EventEmitterModule } from '@nestjs/event-emitter';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { validateEnv } from './config/env.validation';
 import { dataSourceOptions } from './config/typeorm-datasource';
+import { AuthModule } from './modules/auth/auth.module';
+import { BackOfficeModule } from './modules/back-office/back-office.module';
+import { ConsultationsModule } from './modules/consultations/consultations.module';
+import { FeedModule } from './modules/feed/feed.module';
 import { FichePaysModule } from './modules/fiche-pays/fiche-pays.module';
+import { NotificationsModule } from './modules/notifications/notifications.module';
 import { ReferentielModule } from './modules/referentiel/referentiel.module';
 
 @Module({
@@ -21,10 +27,20 @@ import { ReferentielModule } from './modules/referentiel/referentiel.module';
       autoLoadEntities: true,
     }),
 
-    // Modules métier — périmètre Dev B.
-    // Les modules du Dev A (auth, feed, consultations, notifications) seront ajoutés par lui.
-    ReferentielModule,
-    FichePaysModule,
+    // Communication inter-modules par événements internes (ex. debat.resume.valide → Feed).
+    EventEmitterModule.forRoot(),
+
+    // Socle transverse (Dev A) — doit être importé avant les modules qui dépendent
+    // du RolesGuard/JWT global.
+    AuthModule,
+
+    // Modules métier.
+    ReferentielModule, // Dev B
+    FichePaysModule, // Dev B — valeurs d'indicateurs, synthèses IA + validation
+    FeedModule, // Dev A
+    ConsultationsModule, // Dev A
+    NotificationsModule, // Dev A
+    BackOfficeModule, // Dev A — dashboard, modération unifiée, journal d'audit (APP_INTERCEPTOR)
   ],
 })
 export class AppModule {}

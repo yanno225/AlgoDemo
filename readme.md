@@ -45,25 +45,146 @@ API : http://localhost:3000 — Documentation Swagger : http://localhost:3000/ap
 | `npm run migration:generate -- src/database/migrations/NomMigration` | Génère une migration à partir du diff entités/schéma |
 | `npm run seed` | Seed idempotent du référentiel |
 
-## Authentification — ⚠️ provisoire
+## Module Auth & Identité (CDC §9.3)
 
-Le module Auth (JWT, 2FA, RGPD) **n'est pas encore implémenté** (périmètre Dev A).
-En attendant, les routes protégées utilisent un guard de développement qui lit le
-rôle dans l'en-tête `X-Debug-Role` :
+JWT (access + refresh), RBAC, 2FA (TOTP) et primitives RGPD. Le guard partagé
+`src/common/guards/roles.guard.ts` vérifie désormais un vrai JWT (le guard de
+développement `X-Debug-Role` a été retiré) — contrat inchangé : lecture de la
+métadonnée `@Roles()`, routes sans `@Roles()` publiques, utilisateur déposé sur
+`request.user`.
+
+Rôles (enum partagé `src/common/enums/role.enum.ts`, CDC §9.3) :
+`UTILISATEUR` · `POINT_FOCAL` · `ADMIN`.
+
+| Route | Accès | Description |
+|---|---|---|
+| `POST /auth/register` | Public | Inscription — envoie un code OTP (email/SMS) |
+| `POST /auth/verify-email` | Public | Confirme l'email avec le code reçu |
+| `POST /auth/resend-otp` | Public | Renvoie un nouveau code |
+| `POST /auth/login` | Public | Connexion — access + refresh token (`{deuxFaRequis:true}` si 2FA activée) |
+| `POST /auth/refresh` | Public | Renouvelle les tokens |
+| `POST /auth/logout` | Authentifié | Révoque le refresh token courant |
+| `GET /auth/me` | Authentifié | Profil courant |
+| `POST /auth/2fa/enable` · `/confirm` · `/disable` | Authentifié | Activation TOTP (2FA obligatoire pour les votes, §6.3) |
+| `PATCH /auth/consent` | Authentifié | RGPD — consentement notifications / politique de confidentialité |
+| `POST /auth/anonymisation` | Authentifié | RGPD — `demanderAnonymisation()` (irréversible) |
+| `GET /auth/users` | `ADMIN` | Liste des comptes |
+| `PATCH /auth/users/:id/valider` · `/bloquer` · `/role` | `ADMIN` | Validation, blocage, attribution/certification point focal |
+
+Exemple :
 
 ```bash
 curl -X POST http://localhost:3000/thematiques \
   -H "Content-Type: application/json" \
-  -H "X-Debug-Role: ADMIN" \
+  -H "Authorization: Bearer <accessToken>" \
   -d '{"libelle": "Test"}'
 ```
 
-Rôles disponibles (enum partagé `src/common/enums/role.enum.ts`, CDC §9.3) :
-`UTILISATEUR` · `POINT_FOCAL` · `ADMIN`.
+⚠️ **Envoi OTP non branché** : `OtpService` (`src/modules/auth/services/otp.service.ts`)
+journalise le code au lieu de l'envoyer par email/SMS — à remplacer par un vrai
+fournisseur avant mise en production.
 
-**À remplacer par le guard JWT** en conservant le contrat : lecture de la
-métadonnée `@Roles()`, routes sans `@Roles()` publiques, utilisateur déposé sur
-`request.user`. Voir `src/common/guards/roles.guard.ts`.
+## Module Feed / Contenu (CDC §6.1-§6.2, §9.4)
+
+Articles, fiches et vidéos rattachés à une thématique du Référentiel. Un
+contenu créé par un point focal/admin n'est visible dans `GET /feed` qu'une
+fois publié (`PATCH /feed/:id/publier`).
+
+| Route | Accès | Description |
+|---|---|---|
+| `GET /feed` | Public | Paginé — filtres `thematiqueId`, `type`, `statutVerification`, `telechargeable`, `dateDebut`/`dateFin`, recherche `q` (mot-clé), tri `date`\|`pertinence` |
+| `GET /feed/offline` | Public | Package hors-ligne : contenus publiés marqués `telechargeable` |
+| `GET /feed/historique` | Authentifié | Historique de lecture de l'utilisateur courant |
+| `GET /feed/:id` | Public | Détail (médias, audio) |
+| `POST /feed` | `POINT_FOCAL`, `ADMIN` | Créer un contenu (non publié par défaut) |
+| `PATCH /feed/:id` | `POINT_FOCAL`, `ADMIN` | Modifier (thématique, statutVerification, estOfficiel, source...) |
+| `PATCH /feed/:id/publier` · `/depublier` | `POINT_FOCAL`, `ADMIN` | Publication |
+| `POST /feed/:id/audio` | `POINT_FOCAL`, `ADMIN` | Génère l'audio TTS du contenu |
+| `POST /feed/:id/lu` | Authentifié | Marquer comme lu (historique) |
+| `DELETE /feed/:id` | `ADMIN` | Supprimer |
+| `POST /feed/:id/signaler` | Authentifié | Signaler un contenu (fausse information, contenu inapproprié...) |
+| `GET /feed/signalements` | `POINT_FOCAL`, `ADMIN` | File des signalements en attente |
+| `PATCH /feed/signalements/:id/traiter` | `POINT_FOCAL`, `ADMIN` | `{action: "DEPUBLIER"\|"IGNORER"}` |
+
+⚠️ **TTS/média non branché** : `TtsService` (`src/modules/feed/services/tts.service.ts`)
+journalise la demande et renvoie une URL placeholder — à remplacer par le
+`MediaService` partagé (socle transverse, S3 + TTS réel) avant mise en production.
+
+**Contrat événementiel avec Dev B** : une fois le module Débats prêt, un résumé
+de débat validé humainement doit être publié comme `Contenu` en émettant
+`debat.resume.valide` (voir `src/modules/feed/events/debat-resume-valide.event.ts`
+pour la forme exacte du payload et `DebatResumeListener` pour la réception).
+
+## Module Consultations & Participation (CDC §6.2-§6.3)
+
+Consultations citoyennes (projets de loi vulgarisés) à vote unique sécurisé, et
+avis écrits rattachés au Référentiel, modérés avant publication.
+
+| Route | Accès | Description |
+|---|---|---|
+| `GET /consultations` | Public | Liste — filtre `?statut=ouvertes\|cloturees\|toutes` |
+| `GET /consultations/:id` | Public | Détail + options de vote |
+| `GET /consultations/:id/resultats` | Public | Résultats agrégés — `404` tant que non publiés |
+| `POST /consultations` | `POINT_FOCAL`, `ADMIN` | Créer (titre, description, résumé vulgarisé, dates, options de vote) |
+| `PATCH /consultations/:id` | `POINT_FOCAL`, `ADMIN` | Modifier (options non modifiables après création) |
+| `PATCH /consultations/:id/resultats/publier` | `ADMIN` | Publier les résultats agrégés |
+| `POST /consultations/:id/vote` | Authentifié | Vote unique — **2FA obligatoire** (`codeOtp` requis, `403` si la 2FA du compte est désactivée, `409` si déjà voté) |
+| `DELETE /consultations/:id` | `ADMIN` | Supprimer |
+| `GET /avis` | Public | Avis **approuvés** — filtre `?thematiqueId` |
+| `GET /avis/moderation` | `POINT_FOCAL`, `ADMIN` | File de modération (avis en attente) |
+| `GET /avis/:id` | Public | Détail — `404` si non approuvé |
+| `POST /avis` | Authentifié | Soumettre un avis (passe en modération, `EN_ATTENTE`) |
+| `PATCH /avis/:id/moderer` | `POINT_FOCAL`, `ADMIN` | Approuver/rejeter (`{decision, motif?}`) |
+
+## Module Notifications (CDC §3.0/§3.9)
+
+Notifications in-app + déclenchement push, entièrement pilotées par événements
+(`notif.*`, `@nestjs/event-emitter`) émis par les autres modules — jamais
+d'appel direct entre modules. Toujours filtrées par consentement RGPD
+(`User.consentementNotifications`, voir `PATCH /auth/consent`).
+
+| Route | Accès | Description |
+|---|---|---|
+| `POST /notifications/devices` | Authentifié | Enregistrer le token push de l'appareil courant |
+| `DELETE /notifications/devices/:token` | Authentifié | Désenregistrer un token (idempotent) |
+| `GET /notifications` | Authentifié | Notifications de l'utilisateur courant |
+| `PATCH /notifications/lues` | Authentifié | Marquer toutes comme lues |
+| `PATCH /notifications/:id/lue` | Authentifié | Marquer une notification comme lue |
+
+**Contrat d'événements `notif.*`** (voir `src/modules/notifications/events/notification.events.ts`) —
+n'importe quel module (y compris les futurs modules Dev B) peut déclencher une
+notification en émettant l'un de ces événements via `EventEmitter2` :
+
+| Événement | Émis par | Portée |
+|---|---|---|
+| `notif.contenu.publie` | Feed (`FeedService.publier`) | Diffusion à tous les comptes consentants |
+| `notif.resultats.publies` | Consultations (`publierResultats`) | Ciblée : les votants de la consultation |
+| `notif.moderation` | Avis (`moderer`) | Ciblée : l'auteur de l'avis |
+| `notif.debat.demarre` | *(Dev B, module Débats à venir)* | Diffusion ou ciblée (`userIds` optionnel dans le payload) |
+
+⚠️ **Push non branché** : `PushService` (`src/modules/notifications/services/push.service.ts`)
+journalise l'envoi vers les appareils enregistrés — à remplacer par de vrais
+appels FCM/APNs avant mise en production.
+
+## Back-office / Modération transverse (CDC §3.10)
+
+Dashboard, file de modération unifiée et journal d'audit — agrège les modules
+Feed, Consultations et Auth sans dupliquer leur logique métier.
+
+| Route | Accès | Description |
+|---|---|---|
+| `GET /back-office/stats` | `ADMIN` | Utilisateurs (par rôle), contenus, consultations, avis, signalements |
+| `GET /back-office/moderation` | `POINT_FOCAL`, `ADMIN` | File unifiée : avis en attente + contenus non vérifiés + signalements en attente, triés par ancienneté |
+| `GET /back-office/audit` | `ADMIN` | Dernières actions mutatives (`?limite=100`) |
+
+**Journal d'audit automatique** : `AuditInterceptor` (`src/modules/back-office/interceptors/audit.interceptor.ts`)
+est enregistré comme `APP_INTERCEPTOR` global — il journalise toute requête
+`POST`/`PATCH`/`PUT`/`DELETE` effectuée par un utilisateur authentifié, quel
+que soit le module. Couvre donc automatiquement les futurs modules (Débats,
+Fiche-pays côté Dev B) sans modification.
+
+**Gestion des rôles / certification des points focaux** : déjà couverte par
+`PATCH /auth/users/:id/role` (module Auth, voir plus haut) — pas dupliquée ici.
 
 ## Module Référentiel (CDC §5)
 
@@ -137,10 +258,15 @@ src/
 │   ├── migrations/
 │   └── seeds/
 └── modules/
-    ├── referentiel/         # Thématique › Critère › Indicateur (entités, DTOs, services, contrôleurs)
-    ├── fiche-pays/          # ValeurIndicateur + consultation par pays + import CSV + synthèses IA
-    └── ia/                  # Service IA partagé (contrat) — stub à remplacer par Claude
+    ├── referentiel/         # Thématique › Critère › Indicateur (Dev B)
+    ├── fiche-pays/          # ValeurIndicateur + consultation par pays + import CSV + synthèses IA (Dev B)
+    ├── ia/                  # Service IA partagé (contrat) — stub à remplacer par Claude (Dev B)
+    ├── auth/                # JWT, RBAC, 2FA, RGPD (Dev A)
+    ├── feed/                # Contenus, historique, événement debat.resume.valide (Dev A)
+    ├── consultations/       # Consultations (vote 2FA), avis modérés (Dev A)
+    ├── notifications/       # Tokens push, notifications in-app, contrat d'événements notif.* (Dev A)
+    └── back-office/         # Dashboard, modération unifiée, journal d'audit global (Dev A)
 ```
 
-Modules à venir : `debats` (WebSocket temps réel), `collecte` (scraping) (Dev B)
-· `auth`, `feed`, `consultations`, `notifications` (Dev A).
+Modules à venir : `debats` (WebSocket temps réel) et `collecte` (scraping), côté
+Dev B — le périmètre Dev A (§4 de la doc de répartition) est complet.

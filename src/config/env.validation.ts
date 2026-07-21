@@ -48,6 +48,20 @@ class EnvironmentVariables {
   @IsOptional()
   @IsString()
   ANTHROPIC_API_KEY?: string;
+
+  @IsString()
+  JWT_ACCESS_SECRET!: string;
+
+  @IsOptional()
+  @IsString()
+  JWT_ACCESS_EXPIRES_IN: string = '15m';
+
+  @IsString()
+  JWT_REFRESH_SECRET!: string;
+
+  @IsOptional()
+  @IsString()
+  JWT_REFRESH_EXPIRES_IN: string = '7d';
 }
 
 export function validateEnv(

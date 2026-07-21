@@ -17,9 +17,9 @@ import {
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import {
+  ApiBearerAuth,
   ApiBody,
   ApiConsumes,
-  ApiHeader,
   ApiOperation,
   ApiQuery,
   ApiTags,
@@ -32,12 +32,7 @@ import { UpdateValeurIndicateurDto } from '../dto/update-valeur-indicateur.dto';
 import { ValeursIndicateursService } from '../services/valeurs-indicateurs.service';
 
 @ApiTags('Fiche-pays — Valeurs d’indicateurs')
-@ApiHeader({
-  name: 'X-Debug-Role',
-  description:
-    'PROVISOIRE : rôle simulé (ADMIN requis pour POST/PATCH/DELETE/import) — remplacé à terme par le JWT',
-  required: false,
-})
+@ApiBearerAuth() // JWT requis pour POST/PATCH/DELETE/import (ADMIN) — routes GET publiques
 @Controller('valeurs-indicateurs')
 @UseGuards(RolesGuard)
 export class ValeursIndicateursController {
