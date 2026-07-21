@@ -21,8 +21,10 @@ import {
   StatutDebat,
   StatutSignalement,
 } from '../enums/debats.enums';
+import { AuthUser } from '../../../common/interfaces/auth-user.interface';
 import { DebatsGateway } from '../gateway/debats.gateway';
 import { LiveService } from './live.service';
+import { LiveAccess, LivekitService } from './livekit.service';
 
 @Injectable()
 export class DebatsService {
@@ -38,7 +40,22 @@ export class DebatsService {
     private readonly eventEmitter: EventEmitter2,
     private readonly gateway: DebatsGateway,
     private readonly liveService: LiveService,
+    private readonly livekitService: LivekitService,
   ) {}
+
+  /**
+   * Jeton d'accès à la salle vidéo du débat en cours.
+   * Réutilise `rejoindre` (valide EN_COURS + enregistre la participation +
+   * calcule le rôle), puis délivre le jeton LiveKit adapté : le staff peut
+   * publier caméra/micro, le public regarde seulement.
+   */
+  async obtenirAccesLive(debatId: string, user: AuthUser): Promise<LiveAccess> {
+    const { roleParticipation } = await this.liveService.rejoindre(
+      debatId,
+      user,
+    );
+    return this.livekitService.genererAcces(debatId, user, roleParticipation);
+  }
 
   async create(dto: CreateDebatDto): Promise<Debat> {
     const thematique = await this.thematiqueRepo.findOneBy({

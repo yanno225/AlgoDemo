@@ -1,17 +1,17 @@
 import { Controller, Get, Header } from '@nestjs/common';
 import { ApiExcludeController } from '@nestjs/swagger';
+import { readFileSync } from 'fs';
 
 /**
- * PAGE DE DÉMONSTRATION du live — outil de TEST uniquement (pas le produit).
+ * PAGE DE DÉMONSTRATION du live vidéo — outil de TEST (pas le produit final).
  *
- * Usage en salle : lancer l'API, ouvrir http://<ip-du-pc>:3000/live-demo sur
- * les téléphones du même réseau Wi-Fi. Chacun se connecte avec son compte,
- * rejoint le débat en cours et vote — les compteurs bougent sur tous les
- * écrans en temps réel. Le staff (modérateur/point focal/admin) dispose en
- * plus d'un panneau pour soumettre/fermer les affirmations et voir les
- * signalements arriver en direct.
+ * Usage en salle / à distance : lancer l'API + docker (LiveKit), ouvrir
+ * http://<ip-ou-domaine>:3000/live-demo. Chacun se connecte avec SON compte :
+ *  - modérateur / point focal / admin : caméra + micro (ils débattent) ;
+ *  - public : regarde et entend le direct, vote et signale.
  *
- * L'application mobile réelle consommera exactement les mêmes API + WebSocket.
+ * L'application mobile réelle consommera exactement les mêmes API + WebSocket
+ * + salle vidéo LiveKit.
  */
 @ApiExcludeController()
 @Controller('live-demo')
@@ -20,6 +20,16 @@ export class LiveDemoController {
   @Header('content-type', 'text/html; charset=utf-8')
   page(): string {
     return PAGE_HTML;
+  }
+
+  /** Sert le client LiveKit (auto-hébergé — aucune dépendance à un CDN externe) */
+  @Get('livekit-client.js')
+  @Header('content-type', 'application/javascript; charset=utf-8')
+  livekitClient(): string {
+    return readFileSync(
+      require.resolve('livekit-client/dist/livekit-client.umd.js'),
+      'utf-8',
+    );
   }
 }
 
@@ -44,6 +54,10 @@ const PAGE_HTML = `<!doctype html>
   .badge { display: inline-block; background: #14532d; color: #fff; border-radius: 999px; padding: 2px 10px; font-size: .8rem; }
   #signalements div { border-left: 3px solid #b91c1c; padding: 6px 8px; margin-top: 6px; background: #fef2f2; font-size: .9rem; }
   .cache { display: none; }
+  #videos { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  #videos video { width: 100%; border-radius: 8px; background: #000; aspect-ratio: 4/3; object-fit: cover; }
+  #videos .tuile { position: relative; }
+  #videos .nom { position: absolute; bottom: 4px; left: 4px; background: rgba(0,0,0,.6); color: #fff; font-size: .7rem; padding: 1px 6px; border-radius: 4px; }
 </style>
 </head>
 <body>
@@ -72,6 +86,15 @@ const PAGE_HTML = `<!doctype html>
     </div>
 
     <div class="carte">
+      <h2>📹 Direct vidéo</h2>
+      <div id="videos"><p class="muet" id="videoMsg">Connexion à la salle vidéo…</p></div>
+      <div id="controlesStaff" class="ligne cache" style="margin-top:8px">
+        <button class="sec" id="btnCam" onclick="basculerCamera()">📷 Caméra</button>
+        <button class="sec" id="btnMic" onclick="basculerMicro()">🎤 Micro</button>
+      </div>
+    </div>
+
+    <div class="carte">
       <h2>Affirmations au vote</h2>
       <div id="affirmations" class="muet">En attente d'une affirmation du modérateur…</div>
     </div>
@@ -93,8 +116,10 @@ const PAGE_HTML = `<!doctype html>
 </div>
 
 <script src="/socket.io/socket.io.js"></script>
+<script src="/live-demo/livekit-client.js"></script>
 <script>
 var token = null, socket = null, debatId = null, staff = false;
+var salleVideo = null, camOn = false, micOn = false;
 var etatAffirmations = {}; // id -> {texte, statut, valides, invalides}
 
 function el(id) { return document.getElementById(id); }
@@ -136,6 +161,7 @@ function rejoindre(id) {
       if (staff) el('panneauStaff').classList.remove('cache');
       rep.affirmations.forEach(function (a) { etatAffirmations[a.id] = a; });
       rendreAffirmations();
+      connecterVideo(); // rejoint la salle vidéo LiveKit
     });
   });
   socket.on('participants.maj', function (p) { el('nbParticipants').textContent = p.nombre + ' participant(s)'; });
@@ -149,8 +175,74 @@ function rejoindre(id) {
     if (el('signalements').textContent.indexOf('Aucun') === 0) el('signalements').innerHTML = '';
     el('signalements').innerHTML += '<div><b>' + s.de + '</b> : ' + s.message + '</div>';
   });
-  socket.on('debat.cloture', function () { el('etatDebat').textContent = '🔴 Le débat est terminé. Merci de votre participation !'; });
+  socket.on('debat.cloture', function () {
+    el('etatDebat').textContent = '🔴 Le débat est terminé. Merci de votre participation !';
+    if (salleVideo) salleVideo.disconnect();
+  });
 }
+
+// ------- Vidéo LiveKit -------
+
+async function connecterVideo() {
+  try {
+    var r = await fetch('/debats/' + debatId + '/live-token', { headers: { Authorization: 'Bearer ' + token } });
+    if (!r.ok) { el('videoMsg').textContent = 'Vidéo indisponible (' + r.status + ').'; return; }
+    var acces = await r.json();
+
+    salleVideo = new LivekitClient.Room({ adaptiveStream: true, dynacast: true });
+    salleVideo.on(LivekitClient.RoomEvent.TrackSubscribed, function (track, pub, participant) {
+      if (track.kind === 'video' || track.kind === 'audio') ajouterMedia(participant.identity, participant.name || 'Participant', track);
+    });
+    salleVideo.on(LivekitClient.RoomEvent.TrackUnsubscribed, function (track) { track.detach().forEach(function (e) { e.remove(); }); majVideoVide(); });
+    salleVideo.on(LivekitClient.RoomEvent.ParticipantDisconnected, function (p) { retirerTuile(p.identity); });
+
+    await salleVideo.connect(acces.url, acces.token);
+    el('videoMsg').classList.add('cache');
+
+    if (acces.peutPublier) {
+      el('controlesStaff').classList.remove('cache');
+      // Le staff démarre caméra + micro (peut couper ensuite)
+      await salleVideo.localParticipant.setCameraEnabled(true);
+      await salleVideo.localParticipant.setMicrophoneEnabled(true);
+      camOn = micOn = true; majBoutons();
+      attacherLocal();
+    }
+  } catch (e) {
+    el('videoMsg').textContent = 'Vidéo : ' + e.message;
+  }
+}
+
+function ajouterMedia(id, nom, track) {
+  var tuile = el('t-' + id);
+  if (!tuile) {
+    tuile = document.createElement('div');
+    tuile.className = 'tuile'; tuile.id = 't-' + id;
+    tuile.innerHTML = '<span class="nom">' + nom + '</span>';
+    el('videos').appendChild(tuile);
+  }
+  var media = track.attach();
+  if (track.kind === 'video') { media.autoplay = true; media.playsInline = true; tuile.insertBefore(media, tuile.firstChild); }
+  else { media.autoplay = true; tuile.appendChild(media); }
+}
+
+function attacherLocal() {
+  var pub = salleVideo.localParticipant.getTrackPublication(LivekitClient.Track.Source.Camera);
+  if (pub && pub.track) ajouterMedia(salleVideo.localParticipant.identity, 'Vous', pub.track);
+}
+
+function retirerTuile(id) { var t = el('t-' + id); if (t) t.remove(); majVideoVide(); }
+function majVideoVide() { if (!el('videos').querySelector('.tuile')) { el('videoMsg').classList.remove('cache'); el('videoMsg').textContent = 'Aucun intervenant à l’antenne pour le moment.'; } }
+
+async function basculerCamera() { camOn = !camOn; await salleVideo.localParticipant.setCameraEnabled(camOn); if (camOn) attacherLocal(); majBoutons(); }
+async function basculerMicro() { micOn = !micOn; await salleVideo.localParticipant.setMicrophoneEnabled(micOn); majBoutons(); }
+function majBoutons() {
+  el('btnCam').style.background = camOn ? '#14532d' : '#64748b';
+  el('btnMic').style.background = micOn ? '#14532d' : '#64748b';
+  el('btnCam').textContent = camOn ? '📷 Caméra ✓' : '📷 Caméra';
+  el('btnMic').textContent = micOn ? '🎤 Micro ✓' : '🎤 Micro';
+}
+
+// ------- Votes / signalements / affirmations (inchangé) -------
 
 function majDecompte(d, statut) {
   var a = etatAffirmations[d.affirmationId];

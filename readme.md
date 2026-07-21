@@ -271,6 +271,23 @@ Serveur → salle : `participants.maj`, `affirmation.nouvelle`, `vote.maj`,
 `affirmation.fermee`, `debat.demarre`, `debat.cloture`, `signalement.nouveau`
 (staff). Détail des payloads : `src/modules/debats/gateway/debats.gateway.ts`.
 
+### Vidéo en direct (LiveKit, auto-hébergé)
+
+Débat en visio intégré à l'application (scénario « le public suit à distance ») :
+le modérateur et les intervenants publient caméra/micro, le public regarde et
+vote. Le serveur vidéo **LiveKit** tourne dans `docker-compose` ; le backend
+délivre les jetons d'accès selon le rôle de participation.
+
+| Route | Accès | Description |
+|---|---|---|
+| `GET /debats/:id/live-token` | Authentifié | Jeton LiveKit : `canPublish=true` (modérateur/intervenant), écoute seule (public) |
+
+Config `.env` : `LIVEKIT_URL` · `LIVEKIT_API_KEY` · `LIVEKIT_API_SECRET`
+(doivent correspondre au conteneur `livekit`). En dev, les valeurs par défaut
+(`devkey`/`devsecret…`, mode `--dev`) suffisent. **En production** : générer des
+clés fortes et héberger LiveKit en ligne (serveur de l'organisation, §9.2) pour
+qu'un public distant puisse s'y connecter.
+
 ### 🧪 Test en salle (conditions réelles, plusieurs téléphones)
 
 1. Lancer l'API (`npm run start:dev`) et récupérer l'IP locale du PC (`ipconfig`).
@@ -280,8 +297,13 @@ Serveur → salle : `participants.maj`, `affirmation.nouvelle`, `vote.maj`,
    (mot de passe `Demo1234!`), ou leur propre compte.
 3. L'animateur (admin/point focal) crée un débat (Swagger), le **démarre**,
    puis soumet des affirmations depuis son panneau modérateur sur la page.
-4. La salle vote ✅/❌ — les jauges bougent en direct sur tous les écrans ;
-   les signalements arrivent en direct chez le modérateur.
+   Sa caméra/micro s'activent (autoriser l'accès dans le navigateur).
+4. La salle **voit et entend** le direct vidéo, vote ✅/❌ — les jauges bougent
+   sur tous les écrans ; les signalements arrivent chez le modérateur.
+
+Prérequis vidéo : `docker compose up -d` (démarre aussi LiveKit) et, pour un
+accès depuis d'autres appareils, autoriser Node **et** les ports LiveKit
+(7880-7881, 50000-50019/udp) dans le pare-feu.
 
 ⚠️ `/live-demo` et les comptes de démo sont des outils de test — à retirer
 avant la mise en production (l'app mobile consommera les mêmes API/WebSocket).

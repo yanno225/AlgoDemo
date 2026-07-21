@@ -90,6 +90,20 @@ class EnvironmentVariables {
   @IsOptional()
   @IsString()
   SMTP_FROM?: string;
+
+  // LiveKit (vidéo en direct des débats) — doit correspondre au conteneur
+  // livekit de docker-compose. Optionnel : sans clés, la vidéo est désactivée.
+  @IsOptional()
+  @IsString()
+  LIVEKIT_URL: string = 'ws://localhost:7880';
+
+  @IsOptional()
+  @IsString()
+  LIVEKIT_API_KEY?: string;
+
+  @IsOptional()
+  @IsString()
+  LIVEKIT_API_SECRET?: string;
 }
 
 export function validateEnv(

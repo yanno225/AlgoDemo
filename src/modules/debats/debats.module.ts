@@ -11,6 +11,7 @@ import { VoteAffirmation } from './entities/vote-affirmation.entity';
 import { DebatsGateway } from './gateway/debats.gateway';
 import { DebatsService } from './services/debats.service';
 import { LiveService } from './services/live.service';
+import { LivekitService } from './services/livekit.service';
 
 /**
  * Module Débats & Lives Encadrés (CDC §6.4) — priorité v1, Dev B.
@@ -32,7 +33,7 @@ import { LiveService } from './services/live.service';
     ReferentielModule,
   ],
   controllers: [DebatsController, LiveDemoController],
-  providers: [DebatsService, LiveService, DebatsGateway],
+  providers: [DebatsService, LiveService, DebatsGateway, LivekitService],
   exports: [TypeOrmModule],
 })
 export class DebatsModule {}

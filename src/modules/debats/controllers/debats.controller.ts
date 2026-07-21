@@ -18,9 +18,11 @@ import {
   ApiQuery,
   ApiTags,
 } from '@nestjs/swagger';
+import { CurrentUser } from '../../../common/decorators/current-user.decorator';
 import { Roles } from '../../../common/decorators/roles.decorator';
 import { Role } from '../../../common/enums/role.enum';
 import { RolesGuard } from '../../../common/guards/roles.guard';
+import { AuthUser } from '../../../common/interfaces/auth-user.interface';
 import { CreateDebatDto } from '../dto/create-debat.dto';
 import { CreerAffirmationDto } from '../dto/creer-affirmation.dto';
 import { DefinirReplayDto } from '../dto/definir-replay.dto';
@@ -98,6 +100,21 @@ export class DebatsController {
   @ApiOperation({ summary: 'Supprimer un débat (ADMIN)' })
   remove(@Param('id', ParseUUIDPipe) id: string) {
     return this.debatsService.remove(id);
+  }
+
+  // ------- Accès à la salle vidéo en direct -------
+
+  @Get(':id/live-token')
+  @Roles(Role.UTILISATEUR, Role.POINT_FOCAL, Role.ADMIN) // tout compte authentifié
+  @ApiOperation({
+    summary:
+      'Jeton d’accès à la salle vidéo du débat en cours — publie (staff) ou regarde (public) selon le rôle',
+  })
+  obtenirAccesLive(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.debatsService.obtenirAccesLive(id, user);
   }
 
   // ------- Affirmations mises au vote en direct -------

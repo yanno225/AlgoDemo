@@ -1,4 +1,4 @@
-# PostgreSQL 16 pour le développement local d'AlgoDémo
+# Services de développement local d'AlgoDémo
 # Démarrage : docker compose up -d
 services:
   postgres:
@@ -18,6 +18,22 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+
+  # Serveur vidéo temps réel (open source, auto-hébergé) pour les débats en live.
+  # Le backend délivre les jetons d'accès selon le rôle (publier / regarder).
+  livekit:
+    image: livekit/livekit-server:v1.8
+    container_name: algodemo_livekit
+    restart: unless-stopped
+    command: --dev --bind 0.0.0.0
+    environment:
+      # ⚠️ Clés de DÉVELOPPEMENT — doivent correspondre à LIVEKIT_API_KEY/SECRET du .env.
+      # À régénérer pour la production (voir README).
+      LIVEKIT_KEYS: "${LIVEKIT_API_KEY:-devkey}: ${LIVEKIT_API_SECRET:-devsecret_a_changer_32chars_min_ok}"
+    ports:
+      - "${LIVEKIT_PORT:-7880}:7880"      # signalisation WebSocket / API
+      - "7881:7881"                        # WebRTC TCP
+      - "50000-50019:50000-50019/udp"      # médias WebRTC (UDP)
 
 volumes:
   pgdata:
