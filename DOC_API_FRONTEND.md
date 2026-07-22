@@ -48,6 +48,83 @@ npm run start:dev              # API sur le port 3000
 
 ---
 
+## 2 bis. La logique métier du backend (à lire avant de coder les écrans)
+
+### Les 3 rôles et ce qu'ils impliquent à l'écran
+
+- **UTILISATEUR** (citoyen) : lit tout ce qui est public, vote, écrit des avis, participe aux débats (regarde le live, vote ✅/❌, signale). *Il ne publie jamais rien directement.*
+- **POINT_FOCAL** (journaliste/expert certifié par le Labo) : + crée des contenus, anime les débats (caméra/micro), modère.
+- **ADMIN** (équipe Laboratoire) : + gère tout (référentiel, comptes, validations, collecte).
+
+→ L'app doit adapter ses menus au rôle (présent dans `GET /auth/me` et dans le JWT).
+
+### Le principe central : rien n'est publié sans validation humaine
+
+C'est la règle de conception de toute l'application (anti-désinformation oblige).
+Quatre circuits suivent exactement le même schéma **brouillon → validation → publication** :
+
+| Circuit | Qui propose | Qui valide | Où ça finit |
+|---|---|---|---|
+| **Contenu du feed** | Point focal (crée, non publié) | Point focal/Admin (`/publier`) | `GET /feed` |
+| **Avis citoyen** | Utilisateur (`POST /avis`, statut EN_ATTENTE) | Point focal/Admin (modération) | `GET /avis` (approuvés seuls) |
+| **Synthèse fiche-pays** & **résumé de débat** | **L'IA rédige un brouillon** (`texteGenereIA`) | Admin/staff (relit, corrige, valide) | Fiche-pays / Feed |
+| **Valeur d'indicateur collectée** | Les **sources automatiques** (API) et l'**IA** (textes) créent des *propositions* | Admin (avec triangulation + reformulation IA) | Fiche-pays |
+
+→ Conséquence UI : ce qu'un utilisateur vient de soumettre n'apparaît **pas
+immédiatement** en public. Afficher « en attente de modération ».
+
+### Où l'IA intervient (et où elle n'intervient pas)
+
+L'IA (Mistral) **rédige des brouillons** : synthèses de fiche-pays, résumés de
+débats (à partir du **verbatim réellement transcrit** + votes — consigne stricte
+de ne rien inventer), reformulation des valeurs collectées, extraction de
+chiffres depuis des rapports. Elle **ne publie jamais** : un humain valide
+toujours. Elle n'intervient pas dans : l'auth, les votes, le feed, le live.
+
+### Le cycle de vie d'un débat (l'enchaînement complet)
+
+```
+PLANIFIE  ──/demarrer──▶  EN_COURS  ──/cloturer──▶  TERMINE
+(visible                 (le live :                (replay +
+ « à venir »)             vidéo LiveKit,            résumé)
+                          votes, signalements,
+                          transcription)
+```
+1. **PLANIFIE** : créé par le staff, visible dans « à venir ».
+2. **`/demarrer`** → notification push automatique à tous les consentants ; la salle ouvre (socket.io + vidéo).
+3. **EN_COURS** : le public rejoint (`rejoindre`), regarde le direct, vote sur les affirmations lancées par le modérateur, signale ; les intervenants alimentent la transcription (sous-titres en direct).
+4. **`/cloturer`** : la salle ferme (`debat.cloture` diffusé), le débat passe en TERMINE.
+5. Le staff **génère le résumé IA** (basé sur la transcription + votes), le relit, le **valide** → le backend émet un événement interne et le Feed **publie automatiquement** le résumé comme contenu. Le replay (fichier uploadé via `/media/upload`) est rattaché avec `/replay`.
+
+### Le parcours d'une donnée de la fiche-pays (de la source au citoyen)
+
+```
+API ouvertes (Banque Mondiale, OMS…)          Rapports/articles
+   │ job automatique hebdomadaire                 │ admin colle le texte
+   ▼                                              ▼ l'IA extrait les chiffres
+            PROPOSITIONS (une par source — rien de public)
+                           │
+                           ▼
+   Écran admin : triangulation (les sources concordent-elles ?)
+                + reformulation rédigée par l'IA
+                           │  l'admin valide
+                           ▼
+        VALEUR OFFICIELLE → visible dans GET /fiche-pays/{pays}
+                           │  l'admin déclenche/valide la synthèse IA
+                           ▼
+        SYNTHÈSE rédigée par thématique (champ `synthese`)
+```
+
+### Les automatismes entre modules (rien à faire côté front)
+
+- Résumé de débat validé → **publication auto dans le Feed**.
+- Débat démarré / résultats publiés / contenu publié / avis modéré → **notification** créée (+ push si Firebase configuré et consentement donné).
+- Collecte : tourne **toute seule** chaque semaine (cron backend).
+- Sécurité : votes de consultation à **usage unique** (1/personne, 2FA), revote
+  possible uniquement sur les affirmations de débat **tant qu'elles sont ouvertes**.
+
+---
+
 ## 3. Auth & compte (`/auth`)
 
 ### Parcours d'inscription (avec email réel)
