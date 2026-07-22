@@ -120,9 +120,19 @@ cd algodemo-admin && npx tsc --noEmit && npx eslint . && npm run build
 **Le bundler mobile affiche des erreurs incohérentes**
 Vider le cache Metro : `npx expo start --clear`.
 
-**Le back-office renvoie des erreurs 500 après un changement de branche**
-Le cache Turbopack peut se corrompre. Serveur arrêté :
-`rm -rf .next` puis `npm run dev`.
+**Le back-office renvoie des 404 ou des 500 sur des pages qui existent**
+Le cache Turbopack (`.next/`) s'est corrompu — le serveur sert alors un
+manifeste de routes périmé. Relancer avec :
+
+```bash
+npm run dev:clean
+```
+
+Ce script purge le cache puis démarre le serveur. Cause fréquente : un
+service de synchronisation (OneDrive, Drive…) qui touche `.next/` pendant
+que le serveur y écrit. Si le projet vit dans un dossier synchronisé,
+mettre la synchronisation en pause pendant le développement — ou, mieux,
+travailler depuis un dossier non synchronisé : le dépôt GitHub fait foi.
 
 **`npm install` échoue sur un conflit de dépendances**
 Les versions sont alignées sur Expo SDK 54 et Next 16. Ne pas mettre à jour
