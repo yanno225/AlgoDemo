@@ -209,11 +209,14 @@ export default function ProfileScreen() {
                   {t('profile.contributions').toUpperCase()}
                 </Text>
                 <Text
-                  style={{
-                    color: colors.primary,
-                    fontSize: getFontSize(typography.sizes.h2),
-                    fontFamily: typography.families.heading,
-                  }}
+                  style={[
+                    styles.statValue,
+                    {
+                      color: colors.primary,
+                      fontSize: getFontSize(typography.sizes.h1),
+                      fontFamily: typography.families.heading,
+                    },
+                  ]}
                 >
                   142
                 </Text>
@@ -234,11 +237,14 @@ export default function ProfileScreen() {
                 </Text>
                 <View style={styles.statValueRow}>
                   <Text
-                    style={{
-                      color: colors.secondary,
-                      fontSize: getFontSize(typography.sizes.h2),
-                      fontFamily: typography.families.heading,
-                    }}
+                    style={[
+                      styles.statValue,
+                      {
+                        color: colors.secondary,
+                        fontSize: getFontSize(typography.sizes.h1),
+                        fontFamily: typography.families.heading,
+                      },
+                    ]}
                   >
                     98%
                   </Text>
@@ -688,6 +694,13 @@ const styles = StyleSheet.create({
   statLabel: {
     letterSpacing: 0.8,
     marginBottom: spacing.xs,
+  },
+  statValue: {
+    // Chasse tabulaire : les chiffres gardent la même largeur, la carte ne
+    // « danse » pas quand la valeur change au branchement de l'API.
+    fontVariant: ['tabular-nums'],
+    letterSpacing: -0.5,
+    lineHeight: 38,
   },
   statValueRow: {
     flexDirection: 'row',

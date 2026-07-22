@@ -6,6 +6,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { ReducedMotionConfig, ReduceMotion } from 'react-native-reanimated';
 import { StatusBar } from 'expo-status-bar';
 import { useAuthStore } from '../stores/authStore';
 import { useOnboardingStore } from '../stores/onboardingStore';
@@ -63,6 +64,11 @@ export default function RootLayout() {
     // (swipe entre onglets, pull-to-refresh, balayage du feed) ne remontent pas.
     <GestureHandlerRootView style={{ flex: 1 }}>
       <QueryClientProvider client={queryClient}>
+        {/* Aligne toutes les animations Reanimated sur le réglage système
+            « réduire les animations » : parallaxe, ressorts et pulsations se
+            neutralisent d'un coup pour les utilisateurs à troubles
+            vestibulaires. Exigence d'accessibilité de la note conceptuelle. */}
+        <ReducedMotionConfig mode={ReduceMotion.System} />
         <SafeAreaProvider>
           <StatusBar style={isDark ? 'light' : 'dark'} />
           <Stack
