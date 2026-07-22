@@ -113,6 +113,43 @@ class EnvironmentVariables {
   @IsOptional()
   @IsString()
   MISTRAL_MODEL: string = 'mistral-small-latest';
+
+  // Stockage média S3-compatible (MinIO en dev). Optionnel : sans ces
+  // variables, l'upload de fichiers est indisponible (503 explicite).
+  @IsOptional()
+  @IsString()
+  S3_ENDPOINT?: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(65535)
+  S3_PORT: number = 9000;
+
+  @IsOptional()
+  @IsIn(['true', 'false'])
+  S3_USE_SSL: string = 'false';
+
+  @IsOptional()
+  @IsString()
+  S3_ACCESS_KEY?: string;
+
+  @IsOptional()
+  @IsString()
+  S3_SECRET_KEY?: string;
+
+  @IsOptional()
+  @IsString()
+  S3_BUCKET: string = 'algodemo-media';
+
+  @IsOptional()
+  @IsString()
+  S3_PUBLIC_URL?: string;
+
+  // Push réel Firebase (FCM). Optionnel : sans chemin, push journalisés (dev).
+  @IsOptional()
+  @IsString()
+  FIREBASE_SERVICE_ACCOUNT_PATH?: string;
 }
 
 export function validateEnv(

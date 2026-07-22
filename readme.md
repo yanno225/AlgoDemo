@@ -3,6 +3,10 @@
 API backend de l'application mobile de veille citoyenne **AlgoDémo** (Laboratoire Ouest-Méditerranée — Fondation de l'Innovation pour la Démocratie).
 
 **Stack :** NestJS · TypeScript (strict) · PostgreSQL · TypeORM (migrations) · Swagger
+· LiveKit (vidéo live) · MinIO (médias) · socket.io (temps réel) · Mistral AI
+
+> 📱 **Équipe frontend** : voir **[DOC_API_FRONTEND.md](DOC_API_FRONTEND.md)** —
+> toutes les fonctionnalités, les API, le temps réel et la vidéo, écran par écran.
 
 ## Prérequis
 
@@ -389,6 +393,8 @@ src/
     ├── fiche-pays/          # ValeurIndicateur + consultation par pays + import CSV + synthèses IA (Dev B)
     ├── debats/              # Débats & lives : REST + WebSocket temps réel + page /live-demo (Dev B)
     ├── ia/                  # Service IA partagé (contrat) — stub à remplacer par Claude (Dev B)
+    ├── collecte/            # Collecte continue multi-sources + triangulation + reformulation IA (Dev B)
+    ├── media/               # Upload S3 (MinIO) : vidéos, images, replays (socle transverse)
     ├── auth/                # JWT, RBAC, 2FA, RGPD (Dev A)
     ├── feed/                # Contenus, historique, événement debat.resume.valide (Dev A)
     ├── consultations/       # Consultations (vote 2FA), avis modérés (Dev A)

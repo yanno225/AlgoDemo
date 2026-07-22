@@ -12,6 +12,7 @@ import { ConsultationsModule } from './modules/consultations/consultations.modul
 import { DebatsModule } from './modules/debats/debats.module';
 import { FeedModule } from './modules/feed/feed.module';
 import { FichePaysModule } from './modules/fiche-pays/fiche-pays.module';
+import { MediaModule } from './modules/media/media.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { ReferentielModule } from './modules/referentiel/referentiel.module';
 
@@ -45,6 +46,7 @@ import { ReferentielModule } from './modules/referentiel/referentiel.module';
     FichePaysModule, // Dev B — valeurs d'indicateurs, synthèses IA + validation
     DebatsModule, // Dev B — débats & lives (REST + WebSocket temps réel)
     CollecteModule, // Dev B — collecte/veille continue (cron) → propositions de valeurs
+    MediaModule, // Socle transverse — stockage S3 des médias (upload vidéos/images/replays)
     FeedModule, // Dev A
     ConsultationsModule, // Dev A
     NotificationsModule, // Dev A
