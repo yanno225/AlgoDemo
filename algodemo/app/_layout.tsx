@@ -8,6 +8,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { StatusBar } from 'expo-status-bar';
 import { useAuthStore } from '../stores/authStore';
+import { useOnboardingStore } from '../stores/onboardingStore';
 import { useAccessibility } from '../hooks/useAccessibility';
 import { lightColors, darkColors } from '../constants/theme';
 import '../i18n/config';
@@ -36,21 +37,24 @@ export default function RootLayout() {
   });
 
   const { loadSession, isLoading: isAuthLoading } = useAuthStore();
+  const { loadOnboarding, isLoading: isOnboardingLoading } = useOnboardingStore();
   const { isDark } = useAccessibility();
 
   useEffect(() => {
-    // Charger la session utilisateur persistée
+    // Restaurer en parallèle la session et l'état de l'écran de lancement :
+    // l'index a besoin des deux pour décider de la première route.
     loadSession();
+    loadOnboarding();
   }, []);
 
   useEffect(() => {
-    if (fontsLoaded && !isAuthLoading) {
+    if (fontsLoaded && !isAuthLoading && !isOnboardingLoading) {
       // Masquer le splash screen dès que tout est chargé
       SplashScreen.hideAsync();
     }
-  }, [fontsLoaded, isAuthLoading]);
+  }, [fontsLoaded, isAuthLoading, isOnboardingLoading]);
 
-  if (!fontsLoaded || isAuthLoading) {
+  if (!fontsLoaded || isAuthLoading || isOnboardingLoading) {
     return null; // On peut retourner un écran de splash personnalisé ici
   }
 
@@ -72,6 +76,7 @@ export default function RootLayout() {
           >
             {/* Les groupes d'écrans principaux */}
             <Stack.Screen name="index" />
+            <Stack.Screen name="onboarding" options={{ animation: 'fade' }} />
             <Stack.Screen name="(auth)" options={{ animation: 'fade' }} />
             <Stack.Screen name="(tabs)" options={{ animation: 'fade' }} />
           </Stack>

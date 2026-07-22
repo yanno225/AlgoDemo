@@ -14,6 +14,24 @@
     "read": "Lire",
     "download": "Télécharger"
   },
+  "onboarding": {
+    "brandName": "AlgoDémo",
+    "brandTagline": "La démocratie à l'heure des algorithmes",
+    "title": "Bienvenue dans votre espace citoyen",
+    "subtitle": "Participez à la vie démocratique et restez informé en toute transparence.",
+    "audioEnable": "Activer la lecture audio",
+    "audioActive": "Lecture audio activée",
+    "audioHint": "Recommandé pour une expérience inclusive",
+    "languageLabel": "Choisir la langue",
+    "languageSoon": "Bientôt disponible",
+    "start": "Démarrer",
+    "footer": "AlgoDémo est une application de veille au service de la démocratie substantive et de la participation citoyenne.",
+    "languages": {
+      "fr": "Français",
+      "dyu": "Dioula",
+      "hau": "Haoussa"
+    }
+  },
   "auth": {
     "brand": {
       "name": "AlgoDémo",
