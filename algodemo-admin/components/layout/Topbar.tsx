@@ -2,9 +2,11 @@ import { Search } from "lucide-react";
 import type { AdminUser } from "@/lib/domain/types";
 import { getInitials } from "@/lib/auth/session";
 import { signOut } from "@/lib/auth/actions";
+import { getNavForRole } from "@/lib/navigation";
 import { listNotifications } from "@/lib/data/notifications";
 import { NotificationsMenu } from "./NotificationsMenu";
 import { UserMenu } from "./UserMenu";
+import { MobileNav } from "./MobileNav";
 
 interface TopbarProps {
   user: AdminUser;
@@ -22,6 +24,10 @@ export async function Topbar({ user }: TopbarProps) {
 
   return (
     <header className="sticky top-0 z-20 flex h-18 shrink-0 items-center gap-4 border-b border-hairline bg-canvas/80 px-6 backdrop-blur-md lg:px-10">
+      {/* Sous 1024px, la colonne latérale n'existe plus : le tiroir prend
+          le relais avec les mêmes entrées, filtrées par le même rôle. */}
+      <MobileNav items={getNavForRole(user.role)} />
+
       <div className="relative hidden max-w-md flex-1 md:block">
         <Search
           className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-ink-subtle"

@@ -13,7 +13,8 @@ import {
 import { cn } from "@/lib/cn";
 import type { NavIcon, NavItem } from "@/lib/navigation";
 
-const ICONS: Record<NavIcon, typeof LayoutDashboard> = {
+/** Table d'icônes partagée avec la navigation mobile (`MobileNav`). */
+export const NAV_ICONS: Record<NavIcon, typeof LayoutDashboard> = {
   dashboard: LayoutDashboard,
   accounts: Users,
   moderation: ShieldCheck,
@@ -57,7 +58,7 @@ export function Sidebar({ items }: SidebarProps) {
       <nav className="flex-1 overflow-y-auto px-4 pb-6" aria-label="Navigation principale">
         <ul className="space-y-1.5">
           {items.map((item) => {
-            const Icon = ICONS[item.icon];
+            const Icon = NAV_ICONS[item.icon];
             const active = isActive(item.href);
 
             return (

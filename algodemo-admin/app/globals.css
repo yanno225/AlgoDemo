@@ -158,6 +158,21 @@
     animation: rise-in 320ms var(--ease-out-soft) both;
   }
 
+  /* Entrée du tiroir de navigation mobile : il glisse depuis le bord
+     gauche, comme la colonne qu'il remplace. */
+  @keyframes slide-in-left {
+    from {
+      transform: translateX(-100%);
+    }
+    to {
+      transform: none;
+    }
+  }
+
+  .animate-slide-in {
+    animation: slide-in-left 260ms var(--ease-out-soft) both;
+  }
+
   /* Remplissage d'une jauge depuis zéro. La cible est passée en variable
      CSS, ce qui évite d'avoir à monter un composant client juste pour
      animer une largeur. */
