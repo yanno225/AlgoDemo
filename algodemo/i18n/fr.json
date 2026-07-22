@@ -214,7 +214,28 @@
     "title": "Assistant IA",
     "badge": "En réétude",
     "subtitle": "Le module d'aide à la vérification est en cours de conception avec le comité scientifique.",
-    "notice": "Ce module est hors périmètre de la version 1. Il sera activé après validation du comité de pilotage."
+    "notice": "Ce module est hors périmètre de la version 1. Il sera activé après validation du comité de pilotage.",
+    "profileEntry": "Assistant IA",
+    "profileEntryDesc": "Aide à la vérification des faits — bientôt disponible",
+    "comingSoon": "Bientôt"
+  },
+  "pays": {
+    "tabLabel": "Fiche pays",
+    "title": "Fiche pays",
+    "updatedAt": "Dernière mise à jour : {{date}}",
+    "aiSynthesisLabel": "Synthèse générée par IA",
+    "aiSynthesisNote": "Générée à partir de {{count}} sources analysées",
+    "sources": "Voir les sources détaillées",
+    "sourcePrefix": "Source",
+    "didYouKnow": "Le saviez-vous ?",
+    "selectCountry": "Choisir le pays",
+    "countryNotice": "La comparaison entre les 19 pays du programme arrive dans une prochaine version.",
+    "domains": {
+      "politique": "Politique",
+      "droit": "Droit",
+      "societe": "Société",
+      "numerique": "Numérique"
+    }
   },
   "participation": {
     "title": "Participation citoyenne",

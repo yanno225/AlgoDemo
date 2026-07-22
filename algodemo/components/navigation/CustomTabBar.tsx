@@ -27,7 +27,7 @@ import {
 } from '../../constants/theme';
 import { PressableScale } from '../ui/PressableScale';
 
-const CENTER_ROUTE = 'ai';
+const CENTER_ROUTE = 'pays';
 const BAR_HEIGHT = 62;
 
 /**
@@ -202,7 +202,7 @@ const TabItem: React.FC<{
   );
 };
 
-// ─── Bouton central « IA » ──────────────────────────────────────────
+// ─── Bouton central « Fiche pays » ──────────────────────────────────
 const CenterButton: React.FC<{ isFocused: boolean; onPress: () => void }> = ({
   isFocused,
   onPress,
@@ -244,7 +244,7 @@ const CenterButton: React.FC<{ isFocused: boolean; onPress: () => void }> = ({
           scaleTo={0.9}
           accessibilityRole="tab"
           accessibilityState={{ selected: isFocused }}
-          accessibilityLabel="Assistant IA"
+          accessibilityLabel="Fiche pays"
           style={[styles.centerButton, { shadowColor: colors.primary }]}
         >
           <LinearGradient
@@ -253,7 +253,7 @@ const CenterButton: React.FC<{ isFocused: boolean; onPress: () => void }> = ({
             end={{ x: 1, y: 1 }}
             style={styles.centerGradient}
           >
-            <MaterialCommunityIcons name="creation" size={26} color="#FFFFFF" />
+            <MaterialCommunityIcons name="map-marker-radius" size={26} color="#FFFFFF" />
           </LinearGradient>
         </PressableScale>
       </Animated.View>

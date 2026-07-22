@@ -12,7 +12,7 @@ export default function TabsLayout() {
     >
       <Tabs.Screen name="feed" />
       <Tabs.Screen name="debats" />
-      <Tabs.Screen name="ai" />
+      <Tabs.Screen name="pays" />
       <Tabs.Screen name="participation" />
       <Tabs.Screen name="profile" />
     </Tabs>

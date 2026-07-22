@@ -329,8 +329,60 @@ export default function ProfileScreen() {
           </Animated.View>
         )}
 
-        {/* ─── Accessibilité ─────────────────────────────────────────── */}
+        {/* ─── Assistant IA (à venir) ────────────────────────────────
+            Le module a quitté la barre d'onglets, remplacé par la fiche pays.
+            Il reste annoncé ici en attendant sa réintroduction en V2. */}
         <Animated.View entering={enterListItem(4)} style={styles.section}>
+          <View style={[styles.aiCard, { backgroundColor: colors.surface }, shadows.md]}>
+            <LinearGradient
+              colors={thematicGradients.brand}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.aiIcon}
+            >
+              <MaterialCommunityIcons name="creation" size={22} color="#FFFFFF" />
+            </LinearGradient>
+
+            <View style={styles.aiBody}>
+              <Text
+                style={{
+                  color: colors.textPrimary,
+                  fontSize: getFontSize(typography.sizes.bodySmall),
+                  fontFamily: typography.families.bodySemiBold,
+                }}
+              >
+                {t('ai.profileEntry')}
+              </Text>
+              <Text
+                style={{
+                  color: colors.textSecondary,
+                  fontSize: getFontSize(typography.sizes.caption),
+                  fontFamily: typography.families.body,
+                  lineHeight: 16,
+                  marginTop: 2,
+                }}
+              >
+                {t('ai.profileEntryDesc')}
+              </Text>
+            </View>
+
+            <View style={[styles.comingSoonBadge, { backgroundColor: withAlpha(colors.secondary, 0.16) }]}>
+              <Text
+                style={{
+                  color: colors.secondary,
+                  fontSize: getFontSize(typography.sizes.micro),
+                  fontFamily: typography.families.bodyBold,
+                  letterSpacing: 0.4,
+                }}
+              >
+                {t('ai.comingSoon').toUpperCase()}
+              </Text>
+            </View>
+          </View>
+        </Animated.View>
+
+        {/* ─── Accessibilité ─────────────────────────────────────────── */}
+        <Animated.View entering={enterListItem(5)} style={styles.section}>
           <SectionHeader title={t('profile.accessibilityTitle')} style={styles.sectionHeader} />
 
           <View style={[styles.settingsCard, { backgroundColor: colors.surface }, shadows.md]}>
@@ -725,5 +777,27 @@ const styles = StyleSheet.create({
   },
   logout: {
     marginTop: spacing.xs,
+  },
+  aiCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    borderRadius: borderRadius.xl,
+    padding: spacing.md,
+  },
+  aiIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: borderRadius.lg,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  aiBody: {
+    flex: 1,
+  },
+  comingSoonBadge: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 4,
+    borderRadius: borderRadius.full,
   },
 });

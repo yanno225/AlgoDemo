@@ -21,6 +21,8 @@ export interface CircularProgressProps {
   size?: number;
   strokeWidth?: number;
   delay?: number;
+  /** Masque le libellé interne — l'appelant le compose alors lui-même. */
+  hideLabel?: boolean;
 }
 
 /**
@@ -37,6 +39,7 @@ export const CircularProgress: React.FC<CircularProgressProps> = ({
   size = 76,
   strokeWidth = 7,
   delay = 0,
+  hideLabel = false,
 }) => {
   const { colors, getFontSize } = useAccessibility();
 
@@ -105,19 +108,21 @@ export const CircularProgress: React.FC<CircularProgressProps> = ({
         </View>
       </View>
 
-      <Text
-        numberOfLines={2}
-        style={[
-          styles.label,
-          {
-            color: colors.textSecondary,
-            fontSize: getFontSize(typography.sizes.micro),
-            fontFamily: typography.families.bodyMedium,
-          },
-        ]}
-      >
-        {label}
-      </Text>
+      {!hideLabel && (
+        <Text
+          numberOfLines={2}
+          style={[
+            styles.label,
+            {
+              color: colors.textSecondary,
+              fontSize: getFontSize(typography.sizes.micro),
+              fontFamily: typography.families.bodyMedium,
+            },
+          ]}
+        >
+          {label}
+        </Text>
+      )}
     </View>
   );
 };
