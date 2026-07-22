@@ -1,5 +1,5 @@
+import Image from "next/image";
 import { Scale, ShieldCheck, Activity, Lock } from "lucide-react";
-import { NetworkMotif } from "./NetworkMotif";
 
 const PROMISES = [
   { icon: Activity, label: "Analyse des données en temps réel" },
@@ -12,19 +12,46 @@ const SUPPORT_EMAIL = "support@lab.algodemo.org";
 /**
  * Panneau d'identité du parcours d'accès.
  *
- * Éditorial plutôt qu'illustratif : une affirmation forte en serif dit ce que
- * fait la plateforme. Le vert profond est assumé sur toute la hauteur — c'est
- * lui qui donne son caractère à l'écran, et il rend au passage la colonne du
- * formulaire lumineuse par contraste.
+ * L'allégorie de la Justice devant l'hémicycle porte l'identité : balance,
+ * vert institutionnel, lumière dorée — l'image dit le sujet au lieu de le
+ * décorer. La statue vit à droite, le texte à gauche ; deux voiles assurent
+ * la lisibilité sans éteindre l'image :
+ *
+ * - un dégradé horizontal, dense sous le texte, qui s'efface vers la statue ;
+ * - un dégradé vertical qui assoit la liste des promesses et le pied de page.
+ *
+ * Le fond `bg-rail` reste sous l'image : pendant son chargement, le panneau
+ * est déjà aux couleurs de la marque, sans éclair blanc.
  */
 export function BrandPanel() {
   return (
     <aside className="relative isolate flex flex-col justify-between overflow-hidden bg-rail px-8 py-10 lg:px-12 lg:py-14">
-      <NetworkMotif />
+      <Image
+        src="/justice-hall.webp"
+        alt=""
+        fill
+        priority
+        sizes="(min-width: 1024px) 52vw, 100vw"
+        className="object-cover object-[70%_center]"
+      />
 
-      {/* Halo qui décolle le texte du motif, sans le masquer. */}
+      {/* Voile horizontal — le texte se lit, la statue respire. */}
       <div
-        className="pointer-events-none absolute inset-0 bg-[radial-gradient(120%_80%_at_20%_30%,rgba(36,57,28,0.75),rgba(36,57,28,0.35))]"
+        className="pointer-events-none absolute inset-0"
+        style={{
+          background:
+            "linear-gradient(to right, rgba(36,57,28,0.92) 0%, rgba(36,57,28,0.62) 45%, rgba(36,57,28,0.18) 100%)",
+        }}
+        aria-hidden
+      />
+
+      {/* Voile vertical — assoit les promesses et le pied de page. */}
+      <div
+        className="pointer-events-none absolute inset-0"
+        style={{
+          background:
+            "linear-gradient(to top, rgba(36,57,28,0.88) 0%, rgba(36,57,28,0.25) 38%, rgba(36,57,28,0.15) 100%)",
+        }}
         aria-hidden
       />
 
@@ -43,7 +70,7 @@ export function BrandPanel() {
           <em className="italic text-secondary-light">information partagée.</em>
         </h1>
 
-        <p className="mt-6 max-w-md text-[15px] leading-relaxed text-white/65">
+        <p className="mt-6 max-w-md text-[15px] leading-relaxed text-white/75">
           La plateforme d&apos;analyse civique qui met les données publiques au
           service du débat, pas l&apos;inverse.
         </p>
@@ -53,19 +80,21 @@ export function BrandPanel() {
         <ul className="space-y-3">
           {PROMISES.map((promise) => (
             <li key={promise.label} className="flex items-center gap-3">
-              <span className="grid size-7 shrink-0 place-items-center rounded-full bg-secondary/15">
-                <promise.icon className="size-3.5 text-secondary" aria-hidden />
+              <span className="grid size-7 shrink-0 place-items-center rounded-full bg-secondary/20 ring-1 ring-secondary/30">
+                <promise.icon className="size-3.5 text-secondary-light" aria-hidden />
               </span>
-              <span className="text-[14px] text-white/80">{promise.label}</span>
+              <span className="text-[14px] font-medium text-white/85">
+                {promise.label}
+              </span>
             </li>
           ))}
         </ul>
 
-        <p className="mt-8 border-t border-rail-line pt-5 text-[13px] text-white/45">
+        <p className="mt-8 border-t border-white/15 pt-5 text-[13px] text-white/55">
           Une question ?{" "}
           <a
             href={`mailto:${SUPPORT_EMAIL}`}
-            className="font-mono text-white/70 underline-offset-4 transition-colors hover:text-secondary hover:underline"
+            className="font-mono text-white/80 underline-offset-4 transition-colors hover:text-secondary hover:underline"
           >
             {SUPPORT_EMAIL}
           </a>
