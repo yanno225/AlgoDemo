@@ -5,6 +5,7 @@ import { ReferentielModule } from '../referentiel/referentiel.module';
 import { FichePaysController } from './controllers/fiche-pays.controller';
 import { SynthesesController } from './controllers/syntheses.controller';
 import { ValeursIndicateursController } from './controllers/valeurs-indicateurs.controller';
+import { ArticleIndicateur } from './entities/article-indicateur.entity';
 import { Synthese } from './entities/synthese.entity';
 import { ValeurIndicateur } from './entities/valeur-indicateur.entity';
 import { FichePaysService } from './services/fiche-pays.service';
@@ -18,7 +19,7 @@ import { ValeursIndicateursService } from './services/valeurs-indicateurs.servic
  */
 @Module({
   imports: [
-    TypeOrmModule.forFeature([ValeurIndicateur, Synthese]),
+    TypeOrmModule.forFeature([ValeurIndicateur, Synthese, ArticleIndicateur]),
     // Donne accès aux repositories Thematique/Critere/Indicateur
     ReferentielModule,
     IaModule,

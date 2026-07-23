@@ -149,15 +149,10 @@ export class ConsultationsService {
       throw new NotFoundException(`Option ${dto.optionId} introuvable pour cette consultation`);
     }
 
-    const user = await this.usersService.findById(userId);
-    if (!user.deuxFaActif) {
-      throw new ForbiddenException(
-        'La double authentification (2FA) doit être activée pour voter (§6.3) — voir POST /auth/2fa/enable',
-      );
-    }
-    if (!authenticator.check(dto.codeOtp, user.deuxFaSecret ?? '')) {
-      throw new UnauthorizedException('Code 2FA invalide');
-    }
+    // 2FA désactivée pour la v1 (choix produit) — l'unicité du vote (1 par
+    // utilisateur/consultation) reste garantie par la contrainte en base.
+    // Pour réactiver la 2FA (CDC §6.3), restaurer la vérification du code TOTP
+    // (user.deuxFaActif + authenticator.check(dto.codeOtp, user.deuxFaSecret)).
 
     const vote = this.voteRepo.create({ userId, consultation, option });
     try {

@@ -13,7 +13,8 @@
     "migration:generate": "npm run typeorm -- migration:generate",
     "migration:run": "npm run typeorm -- migration:run",
     "migration:revert": "npm run typeorm -- migration:revert",
-    "seed": "ts-node src/database/seeds/referentiel.seed.ts && ts-node src/database/seeds/fiche-pays.seed.ts && ts-node src/database/seeds/admin.seed.ts"
+    "seed": "ts-node src/database/seeds/referentiel.seed.ts && ts-node src/database/seeds/admin.seed.ts",
+    "seed:demo-fiche-pays": "ts-node src/database/seeds/fiche-pays.seed.ts"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.0",
