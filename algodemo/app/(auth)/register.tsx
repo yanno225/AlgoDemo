@@ -20,6 +20,8 @@ import { AuthHeader } from '../../components/feature/auth/AuthHeader';
 import { AuthTabs } from '../../components/feature/auth/AuthTabs';
 import { PasswordStrength } from '../../components/feature/auth/PasswordStrength';
 import { enterSection } from '../../components/ui/motion';
+import * as authService from '../../services/api/auth';
+import { toApiError } from '../../services/api/client';
 import { spacing, typography, borderRadius, motion, withAlpha } from '../../constants/theme';
 
 const MIN_PASSWORD_LENGTH = 8;
@@ -65,15 +67,33 @@ export default function RegisterScreen() {
     return Object.keys(next).length === 0;
   };
 
-  const handleRegister = () => {
+  const handleRegister = async () => {
     if (!validate()) return;
 
+    const email = emailOrPhone.trim();
     setIsLoading(true);
-    // TODO(backend) : POST /auth/register, puis envoi du code de vérification.
-    setTimeout(() => {
+    setErrors({});
+
+    try {
+      await authService.register({
+        email,
+        motDePasse: password,
+        nom: lastName.trim(),
+        prenom: firstName.trim(),
+      });
+      // On garde les identifiants en mémoire pour la connexion automatique
+      // après vérification du code — sans les faire transiter par l'URL.
+      authService.rememberPendingLogin(email, password);
+      // Le code de vérification est envoyé (journalisé en dev) : on passe à
+      // l'écran de saisie du code, en emportant l'email comme destinataire.
+      router.push({ pathname: '/otp', params: { destination: email } });
+    } catch (err) {
+      // Erreur la plus courante : email déjà utilisé (RG-USR-01). On la place
+      // sur le champ concerné plutôt qu'en bandeau générique.
+      setErrors({ emailOrPhone: toApiError(err).message });
+    } finally {
       setIsLoading(false);
-      router.push({ pathname: '/otp', params: { destination: emailOrPhone } });
-    }, 1200);
+    }
   };
 
   return (

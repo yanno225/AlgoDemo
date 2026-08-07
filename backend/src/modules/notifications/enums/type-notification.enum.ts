@@ -1,0 +1,7 @@
+/** Type d'une notification (CDC §3.9) */
+export enum TypeNotification {
+  DEBAT_DEMARRE = 'DEBAT_DEMARRE',
+  RESULTATS_PUBLIES = 'RESULTATS_PUBLIES',
+  NOUVEAU_CONTENU = 'NOUVEAU_CONTENU',
+  MODERATION = 'MODERATION',
+}

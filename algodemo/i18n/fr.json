@@ -54,6 +54,7 @@
       "registerLink": "S'inscrire",
       "forgotPassword": "Mot de passe oublié ?",
       "invalidCredentials": "Identifiants incorrects. Vérifiez votre saisie.",
+      "twoFactorRequired": "Ce compte utilise la double authentification. Saisie du code à venir.",
       "browseWithoutAccount": "Découvrir le fil sans compte"
     },
     "register": {

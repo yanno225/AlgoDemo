@@ -1,0 +1,13 @@
+# Configuration LiveKit pour le développement local (Docker).
+# Les clés viennent de l'environnement (LIVEKIT_KEYS, voir docker-compose).
+port: 7880
+rtc:
+  tcp_port: 7881
+  # Port UDP unique pour les médias WebRTC (mappé dans docker-compose).
+  udp_port: 7882
+  # En local, on n'utilise pas la détection d'IP externe : l'IP annoncée aux
+  # navigateurs est fournie par --node-ip (docker-compose). 127.0.0.1 pour un
+  # test sur le même PC ; l'IP LAN du PC (ex. 192.168.1.20) pour des téléphones.
+  use_external_ip: false
+logging:
+  level: info

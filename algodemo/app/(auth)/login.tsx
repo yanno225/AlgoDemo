@@ -20,68 +20,22 @@ import { AuthHeader } from '../../components/feature/auth/AuthHeader';
 import { AuthTabs } from '../../components/feature/auth/AuthTabs';
 import { enterSection } from '../../components/ui/motion';
 import { useAuthStore } from '../../stores/authStore';
+import * as authService from '../../services/api/auth';
+import { toApiError } from '../../services/api/client';
 import { spacing, typography, borderRadius, motion, withAlpha } from '../../constants/theme';
-
-// ─── Comptes de démonstration ────────────────────────────────────────
-// TODO(backend) : à supprimer dès le branchement de POST /auth/login.
-// Aucune donnée fictive ne doit subsister dans le livrable final.
-const MOCK_ACCOUNTS = [
-  {
-    emailOrPhone: 'demo@algodemo.ci',
-    password: 'demo123',
-    user: {
-      id: 'user_1',
-      firstName: 'Kouassi',
-      lastName: 'Koffi',
-      age: 28,
-      email: 'demo@algodemo.ci',
-      phone: '+225 07 00 00 00',
-      role: 'standard' as const,
-      isActive: true,
-    },
-  },
-  {
-    emailOrPhone: 'admin@algodemo.ci',
-    password: 'admin123',
-    user: {
-      id: 'user_admin',
-      firstName: 'Aminata',
-      lastName: 'Touré',
-      age: 35,
-      email: 'admin@algodemo.ci',
-      phone: '+225 01 00 00 00',
-      role: 'admin_labo' as const,
-      isActive: true,
-    },
-  },
-  {
-    emailOrPhone: '+225 07 00 00 00',
-    password: 'demo123',
-    user: {
-      id: 'user_1',
-      firstName: 'Kouassi',
-      lastName: 'Koffi',
-      age: 28,
-      email: 'demo@algodemo.ci',
-      phone: '+225 07 00 00 00',
-      role: 'standard' as const,
-      isActive: true,
-    },
-  },
-];
 
 export default function LoginScreen() {
   const router = useRouter();
   const { t } = useTranslation();
   const { colors, getFontSize } = useAccessibility();
-  const { setSession } = useAuthStore();
+  const { setSession, setTokens } = useAuthStore();
 
   const [emailOrPhone, setEmailOrPhone] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const handleLogin = () => {
+  const handleLogin = async () => {
     if (!emailOrPhone || !password) {
       setError(t('common.required'));
       return;
@@ -89,26 +43,26 @@ export default function LoginScreen() {
     setError('');
     setIsLoading(true);
 
-    setTimeout(async () => {
-      const account = MOCK_ACCOUNTS.find(
-        (a) => a.emailOrPhone === emailOrPhone.trim() && a.password === password
-      );
+    try {
+      const result = await authService.login(emailOrPhone.trim(), password);
 
-      if (!account) {
-        setIsLoading(false);
-        setError(t('auth.login.invalidCredentials'));
+      // Le compte a activé le second facteur : le parcours 2FA sera branché
+      // avec l'écran dédié. En attendant, on l'indique clairement.
+      if (!authService.isTokenPair(result)) {
+        setError(t('auth.login.twoFactorRequired'));
         return;
       }
 
-      try {
-        await setSession(account.user, 'mock_jwt_token_from_backend');
-        router.replace('/feed');
-      } catch (err: any) {
-        setError(err?.message || t('common.error'));
-      } finally {
-        setIsLoading(false);
-      }
-    }, 900);
+      // Poser les jetons d'abord : `fetchMe` en a besoin pour s'authentifier.
+      await setTokens(result.accessToken, result.refreshToken);
+      const user = await authService.fetchMe();
+      await setSession(user, result.accessToken, result.refreshToken);
+      router.replace('/feed');
+    } catch (err) {
+      setError(toApiError(err).message);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (

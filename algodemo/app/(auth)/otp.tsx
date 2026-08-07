@@ -19,6 +19,8 @@ import { AuthHeader } from '../../components/feature/auth/AuthHeader';
 import { OtpInput } from '../../components/feature/auth/OtpInput';
 import { enterSection, enterFade } from '../../components/ui/motion';
 import { useAuthStore } from '../../stores/authStore';
+import * as authService from '../../services/api/auth';
+import { toApiError } from '../../services/api/client';
 import { spacing, typography, borderRadius, motion, withAlpha } from '../../constants/theme';
 
 const OTP_LENGTH = 6;
@@ -29,7 +31,7 @@ export default function OtpScreen() {
   const { t } = useTranslation();
   const params = useLocalSearchParams();
   const { colors, getFontSize } = useAccessibility();
-  const { setSession } = useAuthStore();
+  const { setSession, setTokens } = useAuthStore();
 
   const destination = (params.destination as string) || '';
 
@@ -47,7 +49,7 @@ export default function OtpScreen() {
   }, [secondsLeft]);
 
   const handleVerify = useCallback(
-    (submitted?: string) => {
+    async (submitted?: string) => {
       const value = submitted ?? code;
 
       if (value.length < OTP_LENGTH) {
@@ -59,33 +61,45 @@ export default function OtpScreen() {
       setNotice('');
       setIsLoading(true);
 
-      // TODO(backend) : POST /auth/verify-otp puis récupération du vrai jeton.
-      setTimeout(async () => {
+      try {
+        // 1. Vérifier l'email avec le code reçu.
+        await authService.verifyEmail(destination, value);
+
+        // 2. Connexion automatique avec les identifiants gardés en mémoire.
+        const pending = authService.consumePendingLogin();
+        if (pending && pending.email === destination) {
+          const result = await authService.login(pending.email, pending.password);
+          if (authService.isTokenPair(result)) {
+            await setTokens(result.accessToken, result.refreshToken);
+            const user = await authService.fetchMe();
+            await setSession(user, result.accessToken, result.refreshToken);
+            router.replace('/feed');
+            return;
+          }
+        }
+
+        // Pas d'identifiants en mémoire (arrivée directe sur cet écran) :
+        // l'email est vérifié, on renvoie vers la connexion.
+        router.replace('/login');
+      } catch (err) {
+        setError(toApiError(err).message);
+      } finally {
         setIsLoading(false);
-        await setSession(
-          {
-            id: 'user_1',
-            firstName: 'Kouassi',
-            lastName: 'Koffi',
-            age: 28,
-            email: destination.includes('@') ? destination : undefined,
-            phone: !destination.includes('@') ? destination : undefined,
-            role: 'standard' as const,
-            isActive: true,
-          },
-          'mock_jwt_token_from_backend'
-        );
-        router.replace('/feed');
-      }, 1200);
+      }
     },
-    [code, destination, router, setSession, t]
+    [code, destination, router, setSession, setTokens, t]
   );
 
-  const handleResend = () => {
-    setSecondsLeft(RESEND_DELAY_SECONDS);
-    setCode('');
+  const handleResend = async () => {
     setError('');
-    setNotice(t('auth.otp.resent'));
+    try {
+      await authService.resendOtp(destination);
+      setSecondsLeft(RESEND_DELAY_SECONDS);
+      setCode('');
+      setNotice(t('auth.otp.resent'));
+    } catch (err) {
+      setError(toApiError(err).message);
+    }
   };
 
   return (

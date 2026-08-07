@@ -1,0 +1,171 @@
+import { plainToInstance } from 'class-transformer';
+import {
+  IsIn,
+  IsInt,
+  IsOptional,
+  IsString,
+  Max,
+  Min,
+  validateSync,
+} from 'class-validator';
+
+/**
+ * Schéma des variables d'environnement attendues.
+ * Toute variable manquante ou invalide fait échouer le démarrage (fail-fast),
+ * plutôt que de découvrir le problème à la première requête.
+ */
+class EnvironmentVariables {
+  @IsOptional()
+  @IsIn(['development', 'test', 'production'])
+  NODE_ENV: string = 'development';
+
+  // L'annotation de type explicite est OBLIGATOIRE : c'est elle qui permet à
+  // class-transformer de convertir la chaîne du .env en nombre
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(65535)
+  PORT: number = 3000;
+
+  @IsString()
+  DB_HOST!: string;
+
+  @IsInt()
+  @Min(0)
+  @Max(65535)
+  DB_PORT!: number;
+
+  @IsString()
+  DB_USERNAME!: string;
+
+  @IsString()
+  DB_PASSWORD!: string;
+
+  @IsString()
+  DB_NAME!: string;
+
+  // Réservé aux futurs modules IA (synthèses fiche-pays, résumés de débats)
+  @IsOptional()
+  @IsString()
+  ANTHROPIC_API_KEY?: string;
+
+  @IsString()
+  JWT_ACCESS_SECRET!: string;
+
+  @IsOptional()
+  @IsString()
+  JWT_ACCESS_EXPIRES_IN: string = '15m';
+
+  @IsString()
+  JWT_REFRESH_SECRET!: string;
+
+  @IsOptional()
+  @IsString()
+  JWT_REFRESH_EXPIRES_IN: string = '7d';
+
+  // SMTP (envoi des codes OTP) — optionnel en dev (codes journalisés),
+  // OBLIGATOIRE en production
+  @IsOptional()
+  @IsString()
+  SMTP_HOST?: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(65535)
+  SMTP_PORT: number = 587;
+
+  @IsOptional()
+  @IsIn(['true', 'false'])
+  SMTP_SECURE: string = 'false';
+
+  @IsOptional()
+  @IsString()
+  SMTP_USER?: string;
+
+  @IsOptional()
+  @IsString()
+  SMTP_PASS?: string;
+
+  @IsOptional()
+  @IsString()
+  SMTP_FROM?: string;
+
+  // LiveKit (vidéo en direct des débats) — doit correspondre au conteneur
+  // livekit de docker-compose. Optionnel : sans clés, la vidéo est désactivée.
+  @IsOptional()
+  @IsString()
+  LIVEKIT_URL: string = 'ws://localhost:7880';
+
+  @IsOptional()
+  @IsString()
+  LIVEKIT_API_KEY?: string;
+
+  @IsOptional()
+  @IsString()
+  LIVEKIT_API_SECRET?: string;
+
+  // Service IA (Mistral AI). Sans clé, le service bascule sur le stub (dev).
+  @IsOptional()
+  @IsString()
+  MISTRAL_API_KEY?: string;
+
+  @IsOptional()
+  @IsString()
+  MISTRAL_MODEL: string = 'mistral-small-latest';
+
+  // Stockage média S3-compatible (MinIO en dev). Optionnel : sans ces
+  // variables, l'upload de fichiers est indisponible (503 explicite).
+  @IsOptional()
+  @IsString()
+  S3_ENDPOINT?: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(65535)
+  S3_PORT: number = 9000;
+
+  @IsOptional()
+  @IsIn(['true', 'false'])
+  S3_USE_SSL: string = 'false';
+
+  @IsOptional()
+  @IsString()
+  S3_ACCESS_KEY?: string;
+
+  @IsOptional()
+  @IsString()
+  S3_SECRET_KEY?: string;
+
+  @IsOptional()
+  @IsString()
+  S3_BUCKET: string = 'algodemo-media';
+
+  @IsOptional()
+  @IsString()
+  S3_PUBLIC_URL?: string;
+
+  // Push réel Firebase (FCM). Optionnel : sans chemin, push journalisés (dev).
+  @IsOptional()
+  @IsString()
+  FIREBASE_SERVICE_ACCOUNT_PATH?: string;
+}
+
+export function validateEnv(
+  config: Record<string, unknown>,
+): EnvironmentVariables {
+  const validated = plainToInstance(EnvironmentVariables, config, {
+    // Convertit automatiquement les chaînes du .env vers les types déclarés (ex. PORT → number)
+    enableImplicitConversion: true,
+  });
+
+  const errors = validateSync(validated, { skipMissingProperties: false });
+  if (errors.length > 0) {
+    const details = errors
+      .map((e) => Object.values(e.constraints ?? {}).join(', '))
+      .join(' | ');
+    throw new Error(`Variables d'environnement invalides : ${details}`);
+  }
+  return validated;
+}
