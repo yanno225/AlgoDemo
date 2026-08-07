@@ -1,5 +1,6 @@
 import Image from "next/image";
-import { Scale, ShieldCheck, Activity, Lock } from "lucide-react";
+import { ShieldCheck, Activity, Lock } from "lucide-react";
+import { BrandMark } from "@/components/ui/BrandMark";
 
 const PROMISES = [
   { icon: Activity, label: "Analyse des données en temps réel" },
@@ -56,9 +57,7 @@ export function BrandPanel() {
       />
 
       <div className="relative flex items-center gap-3">
-        <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-rail-raised ring-1 ring-rail-line">
-          <Scale className="size-6 text-secondary" aria-hidden />
-        </span>
+        <BrandMark className="size-11 rounded-xl" markSize={26} />
         <span className="font-heading text-[22px] font-semibold text-rail-ink">
           Algo<span className="text-secondary">Démo</span>
         </span>

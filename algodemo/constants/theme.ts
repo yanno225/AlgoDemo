@@ -27,6 +27,14 @@ const BRAND = {
 
   olive: '#6B5B2D',         // Logo FID — olive/brun
   yellow: '#E8C840',        // Logo FID — jaune vif
+
+  // Palette officielle FID — extraite du logo vectoriel du site de la
+  // fondation (innovationdemocratie.org). Sert aux thématiques et jauges.
+  fidRed: '#E73C27',
+  fidYellow: '#F8DB00',
+  fidSand: '#E6B772',
+  fidGreen: '#375D11',
+  fidOchre: '#B17609',
 } as const;
 
 // ─── Palette Light Mode ──────────────────────────────────────────────
@@ -74,11 +82,11 @@ export const lightColors = {
 
   // Thématiques — couleurs dédiées pour chaque filtre
   thematic: {
-    genreSociete: '#8B5CF6',     // Violet
-    jeunesseSociete: '#F59E0B',  // Ambre
-    droit: BRAND.greenDark,      // Vert (couleur de marque)
-    politique: '#3B82F6',        // Bleu
-    societeVivant: '#10B981',    // Émeraude
+    genreSociete: BRAND.fidRed,       // Rouge FID
+    jeunesseSociete: BRAND.fidYellow, // Jaune FID
+    droit: BRAND.fidGreen,            // Vert FID
+    politique: BRAND.fidOchre,        // Ocre FID
+    societeVivant: BRAND.fidSand,     // Sable FID
   },
 
   // Overlay & ombres
@@ -131,11 +139,11 @@ export const darkColors = {
   live: '#E05A5A',
 
   thematic: {
-    genreSociete: '#A78BFA',
-    jeunesseSociete: '#FBBF24',
-    droit: '#4A8C3A',
-    politique: '#60A5FA',
-    societeVivant: '#34D399',
+    genreSociete: '#F0604C',
+    jeunesseSociete: '#FFE433',
+    droit: '#6FA03A',
+    politique: '#D89A26',
+    societeVivant: '#EFC98E',
   },
 
   overlay: 'rgba(0, 0, 0, 0.6)',
@@ -339,6 +347,59 @@ export const withAlpha = (color: string, alpha: number): string => {
   return `rgba(${r}, ${g}, ${b}, ${clamped})`;
 };
 
+/**
+ * Couleur d'encre lisible posée sur une couleur thématique.
+ *
+ * La palette FID compte des teintes claires (jaune, sable) sur lesquelles le
+ * texte blanc devient illisible : au-delà d'un seuil de luminance, on bascule
+ * sur une encre sombre. Marquée `worklet` pour les mêmes raisons que
+ * `withAlpha` — mais à calculer hors worklet quand c'est possible.
+ */
+export const onThematic = (color: string): string => {
+  'worklet';
+  let hex = color.replace('#', '');
+  if (hex.length === 3) {
+    hex = hex
+      .split('')
+      .map((c) => c + c)
+      .join('');
+  }
+  if (hex.length !== 6) return '#FFFFFF';
+
+  const r = parseInt(hex.slice(0, 2), 16);
+  const g = parseInt(hex.slice(2, 4), 16);
+  const b = parseInt(hex.slice(4, 6), 16);
+
+  // Luminance perçue (Rec. 601) — seuil choisi pour que le jaune et le
+  // sable FID reçoivent une encre sombre, le rouge et le vert du blanc.
+  return 0.299 * r + 0.587 * g + 0.114 * b > 168 ? '#2A2A1E' : '#FFFFFF';
+};
+
+/**
+ * Rend une couleur thématique utilisable comme encre (texte, icône) sur fond
+ * clair : les teintes déjà soutenues passent telles quelles, les teintes
+ * claires (jaune, sable FID) sont assombries jusqu'à redevenir lisibles.
+ */
+export const thematicInk = (color: string): string => {
+  'worklet';
+  let hex = color.replace('#', '');
+  if (hex.length === 3) {
+    hex = hex
+      .split('')
+      .map((c) => c + c)
+      .join('');
+  }
+  if (hex.length !== 6) return color;
+
+  const r = parseInt(hex.slice(0, 2), 16);
+  const g = parseInt(hex.slice(2, 4), 16);
+  const b = parseInt(hex.slice(4, 6), 16);
+  if (0.299 * r + 0.587 * g + 0.114 * b <= 168) return color;
+
+  const toHex = (v: number) => Math.round(v * 0.55).toString(16).padStart(2, '0');
+  return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+};
+
 // ─── Motion — courbes partagées par toute l'app ──────────────────────
 /**
  * Configs Reanimated centralisées. Toute animation passe par ces tokens :
@@ -406,11 +467,11 @@ export const topScrimGradient = [
  * d'image : la règle de design interdit le bloc gris avec icône cassée.
  */
 export const thematicGradients = {
-  genreSociete: ['#A78BFA', '#7C3AED'],
-  jeunesseSociete: ['#FBBF24', '#D97706'],
-  droit: ['#4A8C3A', '#2D4A22'],
-  politique: ['#60A5FA', '#2563EB'],
-  societeVivant: ['#34D399', '#059669'],
+  genreSociete: ['#E73C27', '#A32517'],
+  jeunesseSociete: ['#F8DB00', '#C9952B'],
+  droit: ['#5C8A2A', '#375D11'],
+  politique: ['#B17609', '#7C5206'],
+  societeVivant: ['#E6B772', '#B17609'],
   brand: ['#3A6B2A', '#2D4A22'],
 } as const;
 

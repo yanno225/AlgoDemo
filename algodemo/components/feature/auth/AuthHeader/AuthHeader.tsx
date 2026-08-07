@@ -13,6 +13,7 @@ import { useTranslation } from 'react-i18next';
 import { useAccessibility } from '../../../../hooks/useAccessibility';
 import { spacing, typography, borderRadius, motion } from '../../../../constants/theme';
 import { PressableScale } from '../../../ui/PressableScale';
+import { BrandLogo } from '../../../ui/BrandLogo';
 
 export interface AuthHeaderProps {
   /** Sous-titre affiché sous le nom de l'app. Par défaut : signature de marque. */
@@ -68,11 +69,11 @@ export const AuthHeader: React.FC<AuthHeaderProps> = ({ subtitle, onBack }) => {
       <Animated.View
         style={[
           styles.mark,
-          { backgroundColor: colors.primary, shadowColor: colors.primary },
+          { backgroundColor: '#FFFFFF', shadowColor: colors.primary },
           markStyle,
         ]}
       >
-        <MaterialCommunityIcons name="scale-balance" size={34} color={colors.textInverse} />
+        <BrandLogo size={42} />
       </Animated.View>
 
       <Animated.View style={[styles.texts, textStyle]}>

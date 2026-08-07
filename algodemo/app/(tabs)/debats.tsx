@@ -11,6 +11,7 @@ import { useAccessibility } from '../../hooks/useAccessibility';
 import { Screen, TAB_BAR_CLEARANCE } from '../../components/ui/Screen';
 import { Button } from '../../components/ui/Button';
 import { PressableScale } from '../../components/ui/PressableScale';
+import { BrandLogo } from '../../components/ui/BrandLogo';
 import { SectionHeader } from '../../components/ui/SectionHeader';
 import { LiveDot } from '../../components/ui/LiveDot';
 import { enterListItem, enterSection } from '../../components/ui/motion';
@@ -82,9 +83,7 @@ export default function DebatesScreen() {
         {/* ─── En-tête ─────────────────────────────────────────────── */}
         <Animated.View entering={enterSection(0)} style={styles.header}>
           <View style={styles.brandRow}>
-            <View style={[styles.brandMark, { backgroundColor: colors.primary }]}>
-              <MaterialCommunityIcons name="scale-balance" size={15} color={colors.textInverse} />
-            </View>
+            <BrandLogo size={24} />
             <Text
               style={{
                 color: colors.primary,
@@ -412,13 +411,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.sm,
     marginBottom: spacing.md,
-  },
-  brandMark: {
-    width: 24,
-    height: 24,
-    borderRadius: borderRadius.sm,
-    justifyContent: 'center',
-    alignItems: 'center',
   },
   title: {
     marginBottom: spacing.xs,

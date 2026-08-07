@@ -8,9 +8,9 @@ import {
   ShieldCheck,
   MessagesSquare,
   Library,
-  Scale,
 } from "lucide-react";
 import { cn } from "@/lib/cn";
+import { BrandMark } from "@/components/ui/BrandMark";
 import type { NavIcon, NavItem } from "@/lib/navigation";
 
 /** Table d'icônes partagée avec la navigation mobile (`MobileNav`). */
@@ -42,9 +42,7 @@ export function Sidebar({ items }: SidebarProps) {
   return (
     <aside className="hidden w-68 shrink-0 flex-col bg-rail shadow-[var(--shadow-rail)] lg:flex">
       <div className="flex items-center gap-3 px-5 py-7">
-        <span className="grid size-10 shrink-0 place-items-center rounded-lg bg-rail-raised ring-1 ring-rail-line">
-          <Scale className="size-5 text-rail-ink" aria-hidden />
-        </span>
+        <BrandMark className="size-10 rounded-lg" markSize={22} />
         <span className="min-w-0">
           <span className="block font-heading text-[17px] font-bold text-rail-ink">
             AlgoDémo

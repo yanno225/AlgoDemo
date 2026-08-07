@@ -2,8 +2,7 @@ import React, { useState } from 'react';
 import { StyleSheet, View, Text, ScrollView, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
-import { LinearGradient } from 'expo-linear-gradient';
-import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
 import * as Speech from 'expo-speech';
 import * as Haptics from 'expo-haptics';
@@ -12,7 +11,6 @@ import Animated, {
   useSharedValue,
   withDelay,
   withSpring,
-  withTiming,
   interpolate,
 } from 'react-native-reanimated';
 import { useAccessibility } from '../hooks/useAccessibility';
@@ -21,13 +19,13 @@ import { useOnboardingStore } from '../stores/onboardingStore';
 import { Screen } from '../components/ui/Screen';
 import { Button } from '../components/ui/Button';
 import { PressableScale } from '../components/ui/PressableScale';
+import { BrandLogo } from '../components/ui/BrandLogo';
 import { enterSection } from '../components/ui/motion';
 import {
   spacing,
   typography,
   borderRadius,
   motion,
-  thematicGradients,
   withAlpha,
 } from '../constants/theme';
 
@@ -103,14 +101,9 @@ export default function OnboardingScreen() {
       >
         {/* ─── Marque ──────────────────────────────────────────────── */}
         <Animated.View style={[styles.brand, markStyle]}>
-          <LinearGradient
-            colors={thematicGradients.brand}
-            start={{ x: 0.1, y: 0 }}
-            end={{ x: 0.9, y: 1 }}
-            style={styles.logo}
-          >
-            <MaterialCommunityIcons name="scale-balance" size={40} color="#FFFFFF" />
-          </LinearGradient>
+          <View style={[styles.logo, { shadowColor: colors.primary }]}>
+            <BrandLogo size={54} />
+          </View>
 
           <Text
             style={[
@@ -346,6 +339,15 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: spacing.lg,
+    backgroundColor: '#FFFFFF',
+    ...Platform.select({
+      ios: {
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.16,
+        shadowRadius: 18,
+      },
+      android: { elevation: 5 },
+    }),
     ...Platform.select({
       ios: {
         shadowColor: '#2D4A22',

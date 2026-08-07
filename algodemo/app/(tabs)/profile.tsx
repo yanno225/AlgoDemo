@@ -14,10 +14,12 @@ import { useAuthStore } from '../../stores/authStore';
 import { Screen, TAB_BAR_CLEARANCE } from '../../components/ui/Screen';
 import { Button } from '../../components/ui/Button';
 import { PressableScale } from '../../components/ui/PressableScale';
+import { BrandLogo } from '../../components/ui/BrandLogo';
 import { SectionHeader } from '../../components/ui/SectionHeader';
 import { CircularProgress } from '../../components/ui/CircularProgress';
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
 import { enterListItem, enterSection } from '../../components/ui/motion';
+import * as authService from '../../services/api/auth';
 import {
   spacing,
   typography,
@@ -54,6 +56,9 @@ export default function ProfileScreen() {
 
   const handleLogout = async () => {
     setLogoutConfirmVisible(false);
+    // Révoquer le refresh token côté serveur avant de purger la session
+    // locale : sans cela, le jeton resterait valide 7 jours.
+    await authService.logout();
     await clearSession();
     router.replace('/login');
   };
@@ -100,7 +105,7 @@ export default function ProfileScreen() {
         >
           <View style={styles.coverTop}>
             <View style={styles.brandRow}>
-              <MaterialCommunityIcons name="scale-balance" size={18} color="#FFFFFF" />
+              <BrandLogo variant="badge" size={24} />
               <Text
                 style={{
                   color: '#FFFFFF',

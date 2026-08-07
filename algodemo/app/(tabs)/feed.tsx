@@ -24,6 +24,7 @@ import { useFilterStore } from '../../stores/filterStore';
 import { ThematicFilterBar } from '../../components/feature/feed/ThematicFilterBar';
 import { ImmersiveCard, FeedItem } from '../../components/feature/feed/ImmersiveCard';
 import { PressableScale } from '../../components/ui/PressableScale';
+import { BrandLogo } from '../../components/ui/BrandLogo';
 import { Skeleton } from '../../components/ui/Skeleton';
 import { TAB_BAR_CLEARANCE } from '../../components/ui/Screen';
 import {
@@ -262,9 +263,7 @@ export default function FeedScreen() {
           {!isSearchOpen ? (
             <>
               <View style={styles.brandRow}>
-                <View style={[styles.brandMark, { backgroundColor: withAlpha('#FFFFFF', 0.18) }]}>
-                  <MaterialCommunityIcons name="scale-balance" size={17} color="#FFFFFF" />
-                </View>
+                <BrandLogo variant="badge" size={30} />
                 <Text
                   style={[
                     styles.brandText,
@@ -387,13 +386,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-  },
-  brandMark: {
-    width: 30,
-    height: 30,
-    borderRadius: borderRadius.sm + 2,
-    justifyContent: 'center',
-    alignItems: 'center',
   },
   brandText: {
     color: '#FFFFFF',

@@ -13,10 +13,27 @@ import { useAccessibility } from '../../hooks/useAccessibility';
 import { Screen, TAB_BAR_CLEARANCE } from '../../components/ui/Screen';
 import { Button } from '../../components/ui/Button';
 import { PressableScale } from '../../components/ui/PressableScale';
+import { BrandLogo } from '../../components/ui/BrandLogo';
 import { CircularProgress } from '../../components/ui/CircularProgress';
+import { IndicatorDetailSheet } from '../../components/feature/pays/IndicatorDetailSheet';
 import { enterSection, enterListItem } from '../../components/ui/motion';
-import { COTE_DIVOIRE, DomainId, CountryDomain } from '../../constants/countryProfile';
-import { spacing, typography, borderRadius, shadows, motion, withAlpha } from '../../constants/theme';
+import {
+  COTE_DIVOIRE,
+  DomainId,
+  CountryDomain,
+  CountryIndicator,
+  latestValue,
+  latestSource,
+} from '../../constants/countryProfile';
+import {
+  spacing,
+  typography,
+  borderRadius,
+  shadows,
+  motion,
+  withAlpha,
+  onThematic,
+} from '../../constants/theme';
 
 export default function CountryProfileScreen() {
   const { t } = useTranslation();
@@ -25,6 +42,12 @@ export default function CountryProfileScreen() {
 
   const profile = COTE_DIVOIRE;
   const [activeDomainId, setActiveDomainId] = useState<DomainId>(profile.domains[0].id);
+
+  // Indicateur dont on affiche le détail, et couleur de sa thématique.
+  const [selected, setSelected] = useState<{
+    indicator: CountryIndicator;
+    color: string;
+  } | null>(null);
 
   const activeDomain = useMemo(
     () => profile.domains.find((d) => d.id === activeDomainId) ?? profile.domains[0],
@@ -36,9 +59,7 @@ export default function CountryProfileScreen() {
       {/* ─── En-tête ───────────────────────────────────────────────── */}
       <View style={styles.header}>
         <View style={styles.logoRow}>
-          <View style={[styles.logoMark, { backgroundColor: colors.primary }]}>
-            <MaterialCommunityIcons name="scale-balance" size={15} color={colors.textInverse} />
-          </View>
+          <BrandLogo size={24} />
           <Text
             style={{
               color: colors.primary,
@@ -175,6 +196,7 @@ export default function CountryProfileScreen() {
           key={activeDomain.id}
           domain={activeDomain}
           color={colors.thematic[activeDomain.colorToken]}
+          onSelect={(indicator, color) => setSelected({ indicator, color })}
         />
 
         <Button
@@ -220,6 +242,13 @@ export default function CountryProfileScreen() {
           </View>
         </Animated.View>
       </ScrollView>
+
+      {/* Détail de l'indicateur touché : évolution, sources, tendance. */}
+      <IndicatorDetailSheet
+        indicator={selected?.indicator ?? null}
+        color={selected?.color ?? colors.primary}
+        onClose={() => setSelected(null)}
+      />
     </Screen>
   );
 }
@@ -227,9 +256,12 @@ export default function CountryProfileScreen() {
 // ─── Section d'un domaine ───────────────────────────────────────────
 // Isolée dans son composant, montée avec une `key` liée au domaine : changer
 // de domaine la remonte, ce qui relance l'animation des anneaux depuis zéro.
-const DomainSection: React.FC<{ domain: CountryDomain; color: string }> = ({ domain, color }) => {
+const DomainSection: React.FC<{
+  domain: CountryDomain;
+  color: string;
+  onSelect: (indicator: CountryIndicator, color: string) => void;
+}> = ({ domain, color, onSelect }) => {
   const { colors, getFontSize } = useAccessibility();
-  const { t } = useTranslation();
 
   return (
     <Animated.View entering={enterSection(40)}>
@@ -248,12 +280,16 @@ const DomainSection: React.FC<{ domain: CountryDomain; color: string }> = ({ dom
 
       <View style={styles.grid}>
         {domain.indicators.map((indicator, index) => (
-          <View
+          <PressableScale
             key={indicator.id}
+            onPress={() => onSelect(indicator, color)}
+            scaleTo={motion.scale.card}
+            accessibilityRole="button"
+            accessibilityLabel={`${indicator.labelKey} : ${latestValue(indicator)}${indicator.unit}. Voir le détail`}
             style={[styles.gaugeCard, { backgroundColor: colors.surface }, shadows.sm]}
           >
             <CircularProgress
-              percentage={indicator.value}
+              percentage={latestValue(indicator)}
               label={indicator.labelKey}
               color={color}
               size={84}
@@ -285,9 +321,14 @@ const DomainSection: React.FC<{ domain: CountryDomain; color: string }> = ({ dom
                 },
               ]}
             >
-              {indicator.source}
+              {latestSource(indicator)}
             </Text>
-          </View>
+
+            {/* Repère d'affordance : la carte s'ouvre. */}
+            <View style={styles.gaugeChevron}>
+              <Ionicons name="chevron-forward" size={13} color={colors.textTertiary} />
+            </View>
+          </PressableScale>
         ))}
       </View>
     </Animated.View>
@@ -308,13 +349,17 @@ const DomainPill: React.FC<{
     progress.value = withTiming(isActive ? 1 : 0, { duration: motion.durations.base });
   }, [isActive, progress]);
 
+  // Encre du texte actif calculée hors worklet : les teintes claires de la
+  // palette FID (sable) exigent une encre sombre à la place du blanc.
+  const activeInk = onThematic(color);
+
   const pillStyle = useAnimatedStyle(() => ({
     backgroundColor: interpolateColor(progress.value, [0, 1], [colors.surface, color]),
     borderColor: interpolateColor(progress.value, [0, 1], [colors.border, color]),
   }));
 
   const textStyle = useAnimatedStyle(() => ({
-    color: interpolateColor(progress.value, [0, 1], [colors.textSecondary, colors.textInverse]),
+    color: interpolateColor(progress.value, [0, 1], [colors.textSecondary, activeInk]),
   }));
 
   return (
@@ -357,13 +402,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-  },
-  logoMark: {
-    width: 24,
-    height: 24,
-    borderRadius: borderRadius.sm,
-    justifyContent: 'center',
-    alignItems: 'center',
   },
   countryChip: {
     flexDirection: 'row',
@@ -430,6 +468,11 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.xl,
     paddingVertical: spacing.lg,
     paddingHorizontal: spacing.md,
+  },
+  gaugeChevron: {
+    position: 'absolute',
+    top: spacing.sm,
+    right: spacing.sm,
   },
   gaugeLabel: {
     textAlign: 'center',

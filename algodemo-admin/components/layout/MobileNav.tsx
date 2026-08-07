@@ -3,8 +3,9 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Menu, X, Scale } from "lucide-react";
+import { Menu, X } from "lucide-react";
 import { cn } from "@/lib/cn";
+import { BrandMark } from "@/components/ui/BrandMark";
 import type { NavItem } from "@/lib/navigation";
 import { NAV_ICONS } from "./Sidebar";
 
@@ -67,9 +68,7 @@ export function MobileNav({ items }: MobileNavProps) {
             className="animate-slide-in absolute inset-y-0 left-0 flex w-72 flex-col bg-rail shadow-[var(--shadow-rail)]"
           >
             <div className="flex items-center gap-3 px-5 py-6">
-              <span className="grid size-10 shrink-0 place-items-center rounded-lg bg-rail-raised ring-1 ring-rail-line">
-                <Scale className="size-5 text-rail-ink" aria-hidden />
-              </span>
+              <BrandMark className="size-10 rounded-lg" markSize={22} />
               <span className="min-w-0 flex-1">
                 <span className="block font-heading text-[15px] font-bold text-rail-ink">
                   AlgoDémo

@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "algodemo",
+    "name": "AlgoDémo",
     "slug": "algodemo",
     "scheme": "algodemo",
     "version": "1.0.0",
@@ -12,7 +12,7 @@
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
+        "backgroundColor": "#2D4A22",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
@@ -23,7 +23,14 @@
     },
     "plugins": [
       "expo-router",
-      "expo-splash-screen"
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 180,
+          "backgroundColor": "#F0EBE0"
+        }
+      ]
     ]
   }
 }

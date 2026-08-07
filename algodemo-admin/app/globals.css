@@ -94,11 +94,13 @@
  * liserés devenaient invisibles.
  */
 :root {
-  --color-genre: #8b5cf6;
-  --color-jeunesse: #f59e0b;
-  --color-droit: #2d4a22;
-  --color-politique: #3b82f6;
-  --color-vivant: #10b981;
+  /* Palette officielle FID, extraite du logo vectoriel de la fondation
+     (innovationdemocratie.org) — même correspondance que le mobile. */
+  --color-genre: #e73c27; /* rouge FID */
+  --color-jeunesse: #f8db00; /* jaune FID */
+  --color-droit: #375d11; /* vert FID */
+  --color-politique: #b17609; /* ocre FID */
+  --color-vivant: #e6b772; /* sable FID */
 }
 
 @layer base {

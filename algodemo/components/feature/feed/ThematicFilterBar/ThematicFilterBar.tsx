@@ -10,7 +10,14 @@ import { useTranslation } from 'react-i18next';
 import { useAccessibility } from '../../../../hooks/useAccessibility';
 import { useFilterStore } from '../../../../stores/filterStore';
 import { THEMATICS } from '../../../../constants/thematics';
-import { spacing, typography, borderRadius, motion, withAlpha } from '../../../../constants/theme';
+import {
+  spacing,
+  typography,
+  borderRadius,
+  motion,
+  withAlpha,
+  onThematic,
+} from '../../../../constants/theme';
 import { PressableScale } from '../../../ui/PressableScale';
 
 const getThematicEmoji = (id: string): string => {
@@ -112,9 +119,9 @@ const FilterPill: React.FC<FilterPillProps> = ({
   const isOverlay = variant === 'overlay';
   const restingBackground = isOverlay ? withAlpha('#000000', 0.38) : colors.surface;
   const restingText = isOverlay ? withAlpha('#FFFFFF', 0.85) : colors.textSecondary;
-  // Sur média sombre, la pilule « Tous » devient blanche : son texte doit
-  // alors repasser en sombre pour rester lisible.
-  const activeText = isOverlay && activeColor === '#FFFFFF' ? colors.textPrimary : '#FFFFFF';
+  // L'encre posée sur la couleur active dépend de sa luminance : les teintes
+  // claires (pilule « Tous » blanche, jaune et sable FID) exigent du sombre.
+  const activeText = onThematic(activeColor);
 
   const pillStyle = useAnimatedStyle(() => ({
     backgroundColor: interpolateColor(progress.value, [0, 1], [restingBackground, activeColor]),
