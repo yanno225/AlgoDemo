@@ -14,6 +14,7 @@ import { FeedModule } from './modules/feed/feed.module';
 import { FichePaysModule } from './modules/fiche-pays/fiche-pays.module';
 import { MediaModule } from './modules/media/media.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
+import { ParticipationModule } from './modules/participation/participation.module';
 import { ReferentielModule } from './modules/referentiel/referentiel.module';
 
 @Module({
@@ -49,6 +50,7 @@ import { ReferentielModule } from './modules/referentiel/referentiel.module';
     MediaModule, // Socle transverse — stockage S3 des médias (upload vidéos/images/replays)
     FeedModule, // Dev A
     ConsultationsModule, // Dev A
+    ParticipationModule, // Signalements citoyens de terrain (dépôt mobile → suivi back-office)
     NotificationsModule, // Dev A
     BackOfficeModule, // Dev A — dashboard, modération unifiée, journal d'audit (APP_INTERCEPTOR)
   ],

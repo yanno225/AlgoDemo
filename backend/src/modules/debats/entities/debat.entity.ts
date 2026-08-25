@@ -37,6 +37,14 @@ export class Debat {
   @Column({ type: 'varchar', length: 500, nullable: true })
   urlReplay!: string | null;
 
+  /**
+   * Image de couverture du live (MinIO, via /media/upload). C'est elle qui
+   * distingue visuellement les directs simultanés côté mobile — le reste du
+   * style est commun à tous les lives.
+   */
+  @Column({ type: 'varchar', length: 1000, nullable: true })
+  urlCouverture!: string | null;
+
   /** Compte (point focal/admin) désigné modérateur du live */
   @Column({ type: 'uuid', nullable: true })
   moderateurId!: string | null;

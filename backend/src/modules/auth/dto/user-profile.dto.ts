@@ -17,6 +17,11 @@ export class UserProfileDto {
   @ApiProperty() consentementNotifications!: boolean;
   @ApiProperty({ required: false, nullable: true })
   politiqueConfidentialiteAccepteeLe?: Date | null;
+  /**
+   * Compte anonymisé (RG-USR-07) : le back-office doit masquer l'identité
+   * plutôt que d'afficher les valeurs résiduelles en base.
+   */
+  @ApiProperty() anonymise!: boolean;
   @ApiProperty() creeLe!: Date;
 
   static depuis(user: User): UserProfileDto {
@@ -34,6 +39,7 @@ export class UserProfileDto {
     dto.consentementNotifications = user.consentementNotifications;
     dto.politiqueConfidentialiteAccepteeLe =
       user.politiqueConfidentialiteAccepteeLe ?? null;
+    dto.anonymise = user.anonymise;
     dto.creeLe = user.creeLe;
     return dto;
   }

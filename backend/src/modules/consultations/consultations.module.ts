@@ -7,7 +7,8 @@ import { ConsultationsController } from './consultations.controller';
 import { Avis } from './entities/avis.entity';
 import { ConsultationOption } from './entities/consultation-option.entity';
 import { Consultation } from './entities/consultation.entity';
-import { Vote } from './entities/vote.entity';
+import { Bulletin } from './entities/bulletin.entity';
+import { ParticipationConsultation } from './entities/participation-consultation.entity';
 import { AvisService } from './services/avis.service';
 import { ConsultationsService } from './services/consultations.service';
 
@@ -18,7 +19,13 @@ import { ConsultationsService } from './services/consultations.service';
  */
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Consultation, ConsultationOption, Vote, Avis]),
+    TypeOrmModule.forFeature([
+      Consultation,
+      ConsultationOption,
+      ParticipationConsultation,
+      Bulletin,
+      Avis,
+    ]),
     ReferentielModule, // fournit Repository<Thematique> (rattachement des avis)
     AuthModule, // fournit UsersService (vérification 2FA au vote)
   ],

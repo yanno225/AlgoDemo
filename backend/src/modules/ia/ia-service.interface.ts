@@ -36,6 +36,12 @@ export interface PropositionValeur {
   valeur: number;
   dateMesure: string;
   source: string;
+  /**
+   * CITATION : passage verbatim du texte source d'où la valeur est tirée
+   * (exigence du jury — chaque chiffre doit être vérifiable). Absent pour les
+   * valeurs issues des connecteurs HTTP (la source API fait foi).
+   */
+  extrait?: string;
 }
 
 /** Données transmises à l'IA pour rédiger le résumé d'un débat terminé */
@@ -51,6 +57,53 @@ export interface DonneesResumeDebat {
     valides: number;
     invalides: number;
   }[];
+}
+
+/** Une donnée mesurée, sourcée, mise à disposition de l'assistant citoyen */
+export interface DonneeMesuree {
+  thematique: string;
+  critere: string;
+  indicateur: string;
+  paysOuZone: string;
+  valeur: number;
+  annee: string;
+  source: string;
+}
+
+/**
+ * Texte déjà validé par l'équipe (synthèse publiée d'une fiche pays, contenu
+ * vérifié du feed) — deuxième source de vérité de l'assistant, à côté des
+ * valeurs chiffrées.
+ */
+export interface ReferenceValidee {
+  titre: string;
+  texte: string;
+  source: string;
+}
+
+export interface DonneesVerification {
+  /** L'affirmation soumise par le citoyen, telle quelle */
+  affirmation: string;
+  /** Les données mesurées et validées dont dispose la plateforme */
+  donnees: DonneeMesuree[];
+  /** Les textes validés par l'équipe (synthèses publiées, contenus vérifiés) */
+  references: ReferenceValidee[];
+}
+
+export interface ResultatVerification {
+  verdict: 'COHERENT' | 'CONTREDIT' | 'NON_VERIFIABLE';
+  /** Explication en français simple, appuyée uniquement sur les éléments cités */
+  explication: string;
+  /** Sous-ensemble des données fournies effectivement utilisées pour juger */
+  elements: DonneeMesuree[];
+  /** Sous-ensemble des références validées effectivement utilisées */
+  references: ReferenceValidee[];
+  /**
+   * Contexte général issu des connaissances du modèle — JAMAIS compté dans le
+   * verdict, toujours présenté à l'utilisateur comme « non vérifié par nos
+   * sources ». Null si le modèle n'a rien d'utile ou de sûr à ajouter.
+   */
+  eclairage: string | null;
 }
 
 export interface IaService {
@@ -84,6 +137,17 @@ export interface IaService {
    * fiable. Brouillon soumis à validation admin avant publication.
    */
   reformulerIndicateur(donnees: DonneesReformulation): Promise<string>;
+
+  /**
+   * Assistant citoyen de vérification des faits (CDC — fonctionnalité phare) :
+   * confronte une affirmation aux SEULES données mesurées et validées de la
+   * plateforme. Trois issues : cohérente, contredite, ou non vérifiable avec
+   * nos données — jamais d'invention, chaque élément cité vient de la liste
+   * fournie.
+   */
+  verifierAffirmation(
+    donnees: DonneesVerification,
+  ): Promise<ResultatVerification>;
 }
 
 /** Données transmises à l'IA pour reformuler un indicateur collecté */

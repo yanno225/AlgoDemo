@@ -75,6 +75,7 @@ export class DebatsService {
       this.debatRepo.create({
         titre: dto.titre,
         description: dto.description ?? null,
+        urlCouverture: dto.urlCouverture ?? null,
         dateDebut: new Date(dto.dateDebut),
         moderateurId: dto.moderateurId ?? null,
         thematique,
@@ -130,6 +131,7 @@ export class DebatsService {
     const debat = await this.findOne(id);
     if (dto.titre !== undefined) debat.titre = dto.titre;
     if (dto.description !== undefined) debat.description = dto.description;
+    if (dto.urlCouverture !== undefined) debat.urlCouverture = dto.urlCouverture;
     if (dto.dateDebut !== undefined) debat.dateDebut = new Date(dto.dateDebut);
     if (dto.moderateurId !== undefined) {
       if (dto.moderateurId) {

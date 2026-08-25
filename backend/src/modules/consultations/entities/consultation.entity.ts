@@ -6,6 +6,7 @@ import {
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
+import { TypeConsultation } from '../enums/type-consultation.enum';
 import { ConsultationOption } from './consultation-option.entity';
 
 /** Consultation citoyenne / projet de loi vulgarisé (CDC §6.2) */
@@ -13,6 +14,14 @@ import { ConsultationOption } from './consultation-option.entity';
 export class Consultation {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
+
+  /** CONSULTATION (projet de loi vulgarisé) ou SONDAGE (question rapide) */
+  @Column({
+    type: 'enum',
+    enum: TypeConsultation,
+    default: TypeConsultation.CONSULTATION,
+  })
+  type!: TypeConsultation;
 
   @Column({ length: 255 })
   titre!: string;

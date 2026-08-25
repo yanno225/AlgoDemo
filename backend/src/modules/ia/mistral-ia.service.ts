@@ -4,9 +4,11 @@ import {
   DonneesReformulation,
   DonneesResumeDebat,
   DonneesSynthese,
+  DonneesVerification,
   IaService,
   IndicateurConnu,
   PropositionValeur,
+  ResultatVerification,
 } from './ia-service.interface';
 
 /** Message du format de chat (compatible API Mistral) */
@@ -116,8 +118,9 @@ export class MistralIaService implements IaService {
           content:
             `Indicateurs connus (id = libellé) :\n${liste}\n\n` +
             `Texte à analyser :\n"""${texteBrut.slice(0, 6000)}"""\n\n` +
-            `Renvoie un tableau JSON d'objets {"indicateurId","valeur","dateMesure":"AAAA-MM-JJ","source"} ` +
+            `Renvoie un tableau JSON d'objets {"indicateurId","valeur","dateMesure":"AAAA-MM-JJ","source","extrait"} ` +
             `uniquement pour les indicateurs de la liste dont une valeur chiffrée apparaît clairement. ` +
+            `"extrait" = la phrase EXACTE du texte (verbatim, ≤ 300 caractères) d'où la valeur est tirée. ` +
             `Tableau vide [] si rien de fiable.`,
         },
       ],
@@ -143,6 +146,10 @@ export class MistralIaService implements IaService {
           valeur: p.valeur,
           dateMesure: p.dateMesure,
           source: p.source ?? 'Extraction IA (à vérifier)',
+          extrait:
+            typeof p.extrait === 'string' && p.extrait.trim()
+              ? p.extrait.slice(0, 500)
+              : undefined,
         }));
     } catch (e) {
       this.logger.error(
@@ -176,6 +183,95 @@ export class MistralIaService implements IaService {
           `Rédige la phrase de synthèse à soumettre à validation.`,
       },
     ]);
+  }
+
+  async verifierAffirmation(
+    donnees: DonneesVerification,
+  ): Promise<ResultatVerification> {
+    // Données et références numérotées : le modèle cite des INDEX, jamais du
+    // texte libre.
+    const lignesDonnees = donnees.donnees
+      .map(
+        (d, index) =>
+          `[D${index}] ${d.thematique} › ${d.critere} › ${d.indicateur} — ` +
+          `${d.paysOuZone} : ${d.valeur} (${d.annee}, source : ${d.source})`,
+      )
+      .join('\n');
+    const lignesReferences = donnees.references
+      .map(
+        (r, index) =>
+          `[R${index}] « ${r.titre} » (${r.source}) : ${r.texte.slice(0, 400)}`,
+      )
+      .join('\n');
+
+    const contenu = await this.completer(
+      [
+        {
+          role: 'system',
+          content:
+            "Tu es l'assistant de vérification des faits d'une plateforme démocratique. " +
+            'Le VERDICT se fonde exclusivement sur les données [D…] et références [R…] fournies, sans jamais inventer. ' +
+            "L'« eclairage » est un contexte général prudent issu de tes connaissances (affiché comme non vérifié), chaîne vide si rien de solide. " +
+            'Réponds en JSON : {"verdict": "COHERENT"|"CONTREDIT"|"NON_VERIFIABLE", "explication": string, "index": number[], "indexReferences": number[], "eclairage": string}.',
+        },
+        {
+          role: 'user',
+          content:
+            `Affirmation :\n« ${donnees.affirmation} »\n\n` +
+            `Données [D…] :\n${lignesDonnees || '(aucune)'}\n\n` +
+            `Références [R…] :\n${lignesReferences || '(aucune)'}\n\n` +
+            `Verdict + explication simple (2-4 phrases) + index utilisés + éclairage.`,
+        },
+      ],
+      true,
+    );
+
+    try {
+      const brut = JSON.parse(contenu) as {
+        verdict?: string;
+        explication?: string;
+        index?: unknown;
+        indexReferences?: unknown;
+        eclairage?: string;
+      };
+      const verdict: ResultatVerification['verdict'] =
+        brut.verdict === 'COHERENT' || brut.verdict === 'CONTREDIT'
+          ? brut.verdict
+          : 'NON_VERIFIABLE';
+      const index = Array.isArray(brut.index) ? brut.index : [];
+      const indexReferences = Array.isArray(brut.indexReferences)
+        ? brut.indexReferences
+        : [];
+      return {
+        verdict,
+        explication:
+          brut.explication?.trim() ||
+          'Les données disponibles ne permettent pas de juger cette affirmation.',
+        elements: index
+          .filter(
+            (i): i is number =>
+              Number.isInteger(i) && i >= 0 && i < donnees.donnees.length,
+          )
+          .map((i) => donnees.donnees[i]),
+        references: indexReferences
+          .filter(
+            (i): i is number =>
+              Number.isInteger(i) && i >= 0 && i < donnees.references.length,
+          )
+          .map((i) => donnees.references[i]),
+        eclairage: brut.eclairage?.trim() || null,
+      };
+    } catch {
+      this.logger.error('Réponse Mistral non parsable pour verifierAffirmation');
+      return {
+        verdict: 'NON_VERIFIABLE',
+        explication:
+          "L'assistant n'a pas pu analyser cette affirmation. Réessayez en la reformulant.",
+        elements: [],
+        references: [],
+        eclairage: null,
+      };
+    }
   }
 
   /** Appel à l'API de complétion Mistral */

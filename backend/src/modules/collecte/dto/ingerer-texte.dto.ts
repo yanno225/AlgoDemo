@@ -27,4 +27,15 @@ export class IngererTexteDto {
   @IsString()
   @MaxLength(100)
   paysOuZone?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'URL exacte du document analysé (contrôlée contre la liste blanche, conservée sur chaque proposition)',
+    example: 'https://donnees.banquemondiale.org/indicateur/EG.ELC.ACCS.ZS',
+    maxLength: 1000,
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(1000)
+  urlSource?: string;
 }

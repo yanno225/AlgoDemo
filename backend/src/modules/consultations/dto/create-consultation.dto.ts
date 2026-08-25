@@ -1,14 +1,23 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
   ArrayMinSize,
   IsArray,
   IsDateString,
+  IsEnum,
   IsNotEmpty,
+  IsOptional,
   IsString,
   MaxLength,
 } from 'class-validator';
+import { TypeConsultation } from '../enums/type-consultation.enum';
 
 export class CreateConsultationDto {
+  /** CONSULTATION par défaut ; SONDAGE = question rapide, onglet dédié mobile */
+  @ApiPropertyOptional({ enum: TypeConsultation })
+  @IsOptional()
+  @IsEnum(TypeConsultation)
+  type?: TypeConsultation;
+
   @ApiProperty({ maxLength: 255 })
   @IsString()
   @IsNotEmpty({ message: 'Le titre est obligatoire' })

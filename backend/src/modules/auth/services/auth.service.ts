@@ -84,7 +84,9 @@ export class AuthService {
     return { message: 'Si le compte existe, un nouveau code a été envoyé' };
   }
 
-  async login(dto: LoginDto): Promise<TokensDto | { deuxFaRequis: true }> {
+  async login(
+    dto: LoginDto,
+  ): Promise<TokensDto | { deuxFaRequis: true } | { otpRequis: true }> {
     const user = await this.usersService.findByEmail(dto.email);
     if (!user || !(await bcrypt.compare(dto.motDePasse, user.motDePasseHash))) {
       throw new UnauthorizedException('Email ou mot de passe incorrect');
@@ -99,6 +101,8 @@ export class AuthService {
       throw new ForbiddenException("Ce compte est en attente de validation par un administrateur");
     }
 
+    // Compte protégé par TOTP : le second facteur est l'application
+    // d'authentification, pas l'email.
     if (user.deuxFaActif) {
       if (!dto.codeOtp) {
         return { deuxFaRequis: true };
@@ -106,7 +110,34 @@ export class AuthService {
       if (!authenticator.check(dto.codeOtp, user.deuxFaSecret ?? '')) {
         throw new UnauthorizedException('Code 2FA invalide');
       }
+      return this.emettreTokens(user);
     }
+
+    // CONFIRMATION PAR EMAIL À CHAQUE CONNEXION (§9.3) : le mot de passe
+    // seul ne suffit pas. Premier appel → un code part par email (journalisé
+    // en dev sans SMTP) ; second appel avec le code → jetons.
+    if (!dto.codeOtp) {
+      const { codeHash, expireLe } = await this.otpService.genererEtEnvoyer(
+        user.email,
+      );
+      user.otpCodeHash = codeHash;
+      user.otpExpireLe = expireLe;
+      await this.usersService.save(user);
+      return { otpRequis: true };
+    }
+
+    const valide = await this.otpService.verifier(
+      dto.codeOtp,
+      user.otpCodeHash,
+      user.otpExpireLe,
+    );
+    if (!valide) {
+      throw new UnauthorizedException('Code de connexion invalide ou expiré');
+    }
+    // Usage unique : le code consommé ne peut pas resservir.
+    user.otpCodeHash = null;
+    user.otpExpireLe = null;
+    await this.usersService.save(user);
 
     return this.emettreTokens(user);
   }

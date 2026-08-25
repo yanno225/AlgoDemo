@@ -20,10 +20,12 @@ import { RolesGuard } from '../../common/guards/roles.guard';
 import { AuthUser } from '../../common/interfaces/auth-user.interface';
 import { CreateContenuDto } from './dto/create-contenu.dto';
 import { CreateSignalementDto } from './dto/create-signalement.dto';
+import { CreerCommentaireDto } from './dto/creer-commentaire.dto';
 import { QueryFeedDto } from './dto/query-feed.dto';
 import { TraiterSignalementDto } from './dto/traiter-signalement.dto';
 import { UpdateContenuDto } from './dto/update-contenu.dto';
 import { FeedService } from './services/feed.service';
+import { InteractionsService } from './services/interactions.service';
 import { SignalementsService } from './services/signalements.service';
 import { TtsService } from './services/tts.service';
 
@@ -38,6 +40,7 @@ export class FeedController {
     private readonly feedService: FeedService,
     private readonly ttsService: TtsService,
     private readonly signalementsService: SignalementsService,
+    private readonly interactionsService: InteractionsService,
   ) {}
 
   @Get()
@@ -74,6 +77,111 @@ export class FeedController {
   })
   signalements() {
     return this.signalementsService.findEnAttente();
+  }
+
+  @Get('moderation')
+  @Roles(...GESTIONNAIRES)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary:
+      'File de vérification (POINT_FOCAL, ADMIN) — contenus pas encore vérifiés ou pas encore publiés, invisibles du feed public',
+  })
+  aModerer() {
+    return this.feedService.findAModerer();
+  }
+
+  // ⚠️ Déclarée AVANT ':id' pour ne pas être interprétée comme un UUID
+  @Get('reactions/miennes')
+  @Roles(...TOUS_LES_ROLES)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary:
+      "Contenus aimés par l'utilisateur courant — pour peindre les cœurs du feed",
+  })
+  mesReactions(@CurrentUser() user: AuthUser) {
+    return this.interactionsService.reactionsDe(user.id);
+  }
+
+  @Post(':id/aimer')
+  @Roles(...TOUS_LES_ROLES)
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      "« J'aime » (bascule) — un second appel retire la réaction. Renvoie {aime, total}",
+  })
+  aimer(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.interactionsService.basculerReaction(id, user.id);
+  }
+
+  @Get(':id/commentaires')
+  @ApiOperation({
+    summary: "Commentaires d'un contenu (public) — noms au format « Prénom N. »",
+  })
+  commentaires(@Param('id', ParseUUIDPipe) id: string) {
+    return this.interactionsService.listerCommentaires(id);
+  }
+
+  @Post(':id/commentaires')
+  @Roles(...TOUS_LES_ROLES)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary:
+      'Commenter un contenu — publié immédiatement, modéré a posteriori (suppression gestionnaires)',
+  })
+  commenter(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: CreerCommentaireDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.interactionsService.commenter(
+      id,
+      user.id,
+      dto.texte,
+      dto.parentId,
+    );
+  }
+
+  @Post('commentaires/:id/aimer')
+  @Roles(...TOUS_LES_ROLES)
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: "Aimer/retirer son « j'aime » sur un commentaire (bascule)",
+  })
+  aimerCommentaire(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.interactionsService.basculerReactionCommentaire(id, user.id);
+  }
+
+  @Get(':id/commentaires/reactions-miennes')
+  @Roles(...TOUS_LES_ROLES)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary:
+      "Commentaires de ce contenu que j'ai aimés — pour peindre les cœurs à l'ouverture",
+  })
+  mesReactionsCommentaires(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.interactionsService.reactionsCommentairesDe(user.id, id);
+  }
+
+  @Delete('commentaires/:id')
+  @Roles(...GESTIONNAIRES)
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({
+    summary: 'Supprimer un commentaire (POINT_FOCAL, ADMIN) — modération a posteriori',
+  })
+  supprimerCommentaire(@Param('id', ParseUUIDPipe) id: string) {
+    return this.interactionsService.supprimerCommentaire(id);
   }
 
   @Get(':id')

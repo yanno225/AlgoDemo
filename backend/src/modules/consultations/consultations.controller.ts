@@ -82,7 +82,7 @@ export class ConsultationsController {
   @ApiBearerAuth()
   @ApiOperation({
     summary:
-      'Voter (1 vote/consultation, 2FA obligatoire — §6.3) — 403 si la 2FA du compte est désactivée',
+      'Voter — vote unique et SECRET (§6.3). La réponse ne renvoie jamais le bulletin déposé.',
   })
   voter(
     @Param('id', ParseUUIDPipe) id: string,
@@ -90,6 +90,20 @@ export class ConsultationsController {
     @CurrentUser() user: AuthUser,
   ) {
     return this.consultationsService.voter(id, user.id, dto);
+  }
+
+  @Get(':id/a-vote')
+  @Roles(...TOUS_LES_ROLES)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary:
+      "Le citoyen a-t-il déjà voté ? Renvoie uniquement oui/non — son choix reste secret",
+  })
+  async aVote(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return { aVote: await this.consultationsService.aVote(id, user.id) };
   }
 
   @Delete(':id')

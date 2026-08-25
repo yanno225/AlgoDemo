@@ -24,6 +24,16 @@ export class CreateDebatDto {
   @IsString()
   description?: string;
 
+  @ApiPropertyOptional({
+    description:
+      'URL de l’image de couverture (upload préalable via POST /media/upload) — distingue les lives simultanés',
+    maxLength: 1000,
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(1000)
+  urlCouverture?: string;
+
   @ApiProperty({
     description: 'UUID de la thématique de rattachement (Référentiel)',
     format: 'uuid',

@@ -49,11 +49,32 @@ export class FeedService {
     return this.contenuRepo.save(contenu);
   }
 
+  /**
+   * File de vérification du back-office : tout contenu dont le parcours vers
+   * les citoyens n'est pas terminé — vérification incomplète OU non publié.
+   * `GET /feed` ne montrant que le publié, sans cette vue les contenus en
+   * attente seraient invisibles des modérateurs.
+   */
+  findAModerer(): Promise<Contenu[]> {
+    return this.contenuRepo.find({
+      where: [
+        { statutVerification: StatutVerification.NON_VERIFIE },
+        { statutVerification: StatutVerification.PARTIELLEMENT_VERIFIE },
+        { estPublie: false },
+      ],
+      relations: { thematique: true },
+      order: { creeLe: 'ASC' },
+    });
+  }
+
   /** GET /feed — pagination, filtres, recherche mot-clé, tri (CDC §6.2, §9.4) */
   async findPublies(query: QueryFeedDto): Promise<PageResultat<Contenu>> {
     const qb = this.contenuRepo
       .createQueryBuilder('contenu')
       .leftJoinAndSelect('contenu.thematique', 'thematique')
+      // Compteurs d'interactions (§6.2) — comptés en SQL, lignes jamais chargées
+      .loadRelationCountAndMap('contenu.nombreReactions', 'contenu.reactions')
+      .loadRelationCountAndMap('contenu.nombreCommentaires', 'contenu.commentaires')
       .where('contenu.estPublie = true');
 
     if (query.thematiqueId) {

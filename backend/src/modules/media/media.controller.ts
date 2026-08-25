@@ -27,7 +27,9 @@ export class MediaController {
   constructor(private readonly mediaService: MediaService) {}
 
   @Post('upload')
-  @Roles(Role.POINT_FOCAL, Role.ADMIN)
+  // Ouvert aux citoyens : la photo d'un signalement de terrain (module
+  // Participation) part du téléphone. Tout upload reste authentifié.
+  @Roles(Role.UTILISATEUR, Role.POINT_FOCAL, Role.ADMIN)
   @UseInterceptors(
     FileInterceptor('fichier', { limits: { fileSize: TAILLE_MAX_OCTETS } }),
   )
@@ -42,7 +44,7 @@ export class MediaController {
   })
   @ApiOperation({
     summary:
-      'Uploader un média (POINT_FOCAL/ADMIN) → URL publique à utiliser dans urlMedia/urlReplay',
+      'Uploader un média (tout compte authentifié) → URL publique à utiliser dans urlMedia/urlReplay/urlPhoto',
   })
   async uploader(@UploadedFile() fichier?: Express.Multer.File) {
     if (!fichier) {

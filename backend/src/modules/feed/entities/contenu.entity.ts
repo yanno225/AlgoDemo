@@ -5,12 +5,15 @@ import {
   Index,
   JoinColumn,
   ManyToOne,
+  OneToMany,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
 import { Thematique } from '../../referentiel/entities/thematique.entity';
 import { StatutVerification } from '../enums/statut-verification.enum';
 import { TypeContenu } from '../enums/type-contenu.enum';
+import { CommentaireContenu } from './commentaire-contenu.entity';
+import { ReactionContenu } from './reaction-contenu.entity';
 
 /**
  * Contenu publié dans le feed (CDC §6.1) : article, fiche ou vidéo, rattaché
@@ -78,4 +81,18 @@ export class Contenu {
 
   @UpdateDateColumn({ name: 'maj_le' })
   majLe!: Date;
+
+  // ─── Interactions citoyennes (§6.2) ────────────────────────────────
+  // Relations déclarées pour compter via loadRelationCountAndMap — les
+  // lignes elles-mêmes ne sont jamais chargées avec le contenu.
+
+  @OneToMany(() => ReactionContenu, (reaction) => reaction.contenu)
+  reactions!: ReactionContenu[];
+
+  @OneToMany(() => CommentaireContenu, (commentaire) => commentaire.contenu)
+  commentaires!: CommentaireContenu[];
+
+  /** Renseignés à la lecture par les compteurs — jamais stockés. */
+  nombreReactions?: number;
+  nombreCommentaires?: number;
 }
