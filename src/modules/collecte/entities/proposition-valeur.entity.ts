@@ -43,6 +43,18 @@ export class PropositionValeur {
   @Column({ length: 500 })
   source!: string;
 
+  /**
+   * CITATION : passage verbatim du document source d'où la valeur est tirée
+   * (extraction IA uniquement — null pour les connecteurs HTTP). Permet à
+   * l'admin de vérifier le chiffre sans relire tout le document.
+   */
+  @Column({ type: 'text', nullable: true })
+  extrait!: string | null;
+
+  /** URL exacte du document analysé (lien cliquable côté admin/mobile) */
+  @Column({ type: 'varchar', length: 1000, nullable: true })
+  urlSource!: string | null;
+
   @Column({
     type: 'enum',
     enum: StatutProposition,

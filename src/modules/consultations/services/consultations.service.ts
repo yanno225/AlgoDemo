@@ -7,18 +7,20 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
-import { InjectRepository } from '@nestjs/typeorm';
+import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
 import { authenticator } from 'otplib';
-import { QueryFailedError, Repository } from 'typeorm';
+import { DataSource, QueryFailedError, Repository } from 'typeorm';
 import { UsersService } from '../../auth/services/users.service';
 import { NOTIF_RESULTATS_PUBLIES } from '../../notifications/events/notification.events';
 import { CreateConsultationDto } from '../dto/create-consultation.dto';
 import { QueryConsultationsDto } from '../dto/query-consultations.dto';
 import { UpdateConsultationDto } from '../dto/update-consultation.dto';
 import { VoteDto } from '../dto/vote.dto';
+import { TypeConsultation } from '../enums/type-consultation.enum';
+import { Bulletin } from '../entities/bulletin.entity';
 import { ConsultationOption } from '../entities/consultation-option.entity';
 import { Consultation } from '../entities/consultation.entity';
-import { Vote } from '../entities/vote.entity';
+import { ParticipationConsultation } from '../entities/participation-consultation.entity';
 
 const PG_UNIQUE_VIOLATION = '23505';
 
@@ -35,8 +37,12 @@ export class ConsultationsService {
     private readonly consultationRepo: Repository<Consultation>,
     @InjectRepository(ConsultationOption)
     private readonly optionRepo: Repository<ConsultationOption>,
-    @InjectRepository(Vote)
-    private readonly voteRepo: Repository<Vote>,
+    @InjectRepository(ParticipationConsultation)
+    private readonly participationRepo: Repository<ParticipationConsultation>,
+    @InjectRepository(Bulletin)
+    private readonly bulletinRepo: Repository<Bulletin>,
+    @InjectDataSource()
+    private readonly dataSource: DataSource,
     private readonly usersService: UsersService,
     private readonly eventEmitter: EventEmitter2,
   ) {}
@@ -44,6 +50,7 @@ export class ConsultationsService {
   async create(dto: CreateConsultationDto): Promise<Consultation> {
     this.validerPeriode(dto.dateOuverture, dto.dateCloture);
     const consultation = this.consultationRepo.create({
+      type: dto.type ?? TypeConsultation.CONSULTATION,
       titre: dto.titre,
       description: dto.description,
       resumeVulgarise: dto.resumeVulgarise,
@@ -64,6 +71,10 @@ export class ConsultationsService {
       qb.where('consultation.dateOuverture <= NOW() AND consultation.dateCloture >= NOW()');
     } else if (query.statut === 'cloturees') {
       qb.where('consultation.dateCloture < NOW()');
+    }
+
+    if (query.type) {
+      qb.andWhere('consultation.type = :type', { type: query.type });
     }
 
     return qb.getMany();
@@ -107,8 +118,10 @@ export class ConsultationsService {
     consultation.resultatsPublies = true;
     const publiee = await this.consultationRepo.save(consultation);
 
-    const votants: { user_id: string }[] = await this.voteRepo.query(
-      `SELECT DISTINCT "user_id" FROM "votes" WHERE "consultationId" = $1`,
+    // Les votants sont notifiés depuis l'émargement — la seule table qui
+    // sache encore qui a voté.
+    const votants: { user_id: string }[] = await this.participationRepo.query(
+      `SELECT "user_id" FROM "participations_consultation" WHERE "consultationId" = $1`,
       [id],
     );
     this.eventEmitter.emit(NOTIF_RESULTATS_PUBLIES, {
@@ -126,8 +139,10 @@ export class ConsultationsService {
     if (!consultation.resultatsPublies) {
       throw new NotFoundException('Résultats non publiés pour cette consultation');
     }
-    const comptes: { optionId: string; nombre: string }[] = await this.voteRepo.query(
-      `SELECT "optionId", COUNT(*)::int AS nombre FROM "votes" WHERE "consultationId" = $1 GROUP BY "optionId"`,
+    // Dépouillement : on compte les bulletins de l'urne, sans jamais toucher
+    // à l'émargement.
+    const comptes: { optionId: string; nombre: string }[] = await this.bulletinRepo.query(
+      `SELECT "optionId", COUNT(*)::int AS nombre FROM "bulletins" WHERE "consultationId" = $1 GROUP BY "optionId"`,
       [id],
     );
     const parOption = new Map(comptes.map((c) => [c.optionId, Number(c.nombre)]));
@@ -138,8 +153,24 @@ export class ConsultationsService {
     }));
   }
 
-  /** Vote unique sécurisé : 1 vote/consultation, 2FA obligatoire (CDC §6.3) */
-  async voter(consultationId: string, userId: string, dto: VoteDto): Promise<Vote> {
+  /**
+   * Vote unique et SECRET (CDC §6.3).
+   *
+   * L'émargement (qui vote) et le bulletin (ce qui est voté) sont écrits dans
+   * deux tables sans lien entre elles, mais dans une MÊME transaction : sinon
+   * une panne entre les deux écritures produirait soit un bulletin fantôme,
+   * soit un citoyen émargé dont la voix serait perdue et qui ne pourrait plus
+   * voter.
+   *
+   * La réponse ne renvoie volontairement aucun identifiant de bulletin : le
+   * fournir permettrait au client de rattacher a posteriori un votant à son
+   * choix.
+   */
+  async voter(
+    consultationId: string,
+    userId: string,
+    dto: VoteDto,
+  ): Promise<{ message: string; participeLe: Date }> {
     const consultation = await this.findOne(consultationId);
     if (!consultation.estOuverte()) {
       throw new ForbiddenException("Cette consultation n'est pas ouverte au vote");
@@ -154,9 +185,21 @@ export class ConsultationsService {
     // Pour réactiver la 2FA (CDC §6.3), restaurer la vérification du code TOTP
     // (user.deuxFaActif + authenticator.check(dto.codeOtp, user.deuxFaSecret)).
 
-    const vote = this.voteRepo.create({ userId, consultation, option });
     try {
-      return await this.voteRepo.save(vote);
+      return await this.dataSource.transaction(async (manager) => {
+        // L'émargement d'abord : sa contrainte d'unicité est le rempart
+        // contre le double vote, et elle doit se déclencher avant qu'un
+        // second bulletin ne soit déposé dans l'urne.
+        const participation = await manager.save(
+          manager.create(ParticipationConsultation, { userId, consultation }),
+        );
+        await manager.save(manager.create(Bulletin, { consultation, option }));
+
+        return {
+          message: 'Votre vote a bien été enregistré.',
+          participeLe: participation.participeLe,
+        };
+      });
     } catch (e) {
       if (
         e instanceof QueryFailedError &&
@@ -167,6 +210,14 @@ export class ConsultationsService {
       }
       throw e;
     }
+  }
+
+  /** Le citoyen a-t-il déjà voté ? Sans révéler son choix. */
+  async aVote(consultationId: string, userId: string): Promise<boolean> {
+    const nombre = await this.participationRepo.count({
+      where: { userId, consultation: { id: consultationId } },
+    });
+    return nombre > 0;
   }
 
   private validerPeriode(dateOuverture: string, dateCloture: string): void {

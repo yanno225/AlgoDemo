@@ -1,4 +1,10 @@
-import { Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Inject,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
 import { ILike, Repository } from 'typeorm';
@@ -12,6 +18,7 @@ import {
   SOURCE_CONNECTORS,
   SourceConnector,
 } from './source-connector.interface';
+import { SourcesAutoriseesService } from './sources-autorisees.service';
 
 export interface BilanCollecte {
   parSource: { source: string; propositions: number }[];
@@ -53,6 +60,7 @@ export class CollecteService {
     private readonly connecteurs: SourceConnector[],
     @Inject(IA_SERVICE)
     private readonly iaService: IaService,
+    private readonly sourcesAutorisees: SourcesAutoriseesService,
   ) {}
 
   /**
@@ -100,14 +108,32 @@ export class CollecteService {
   }
 
   /**
-   * Ingestion d'un texte (article/rapport) → l'IA extrait les valeurs
-   * rattachées aux indicateurs connus → propositions EN_ATTENTE.
+   * Ingestion d'un texte (article/rapport) → contrôle LISTE BLANCHE de la
+   * source → l'IA extrait les valeurs (avec citation verbatim) rattachées aux
+   * indicateurs connus → propositions EN_ATTENTE.
    */
   async ingererTexte(
     texteBrut: string,
     sourceLabel: string,
     paysOuZone = PAYS_PILOTE,
-  ): Promise<{ propositionsCreees: number; doublonsIgnores: number }> {
+    urlSource?: string,
+  ): Promise<{
+    propositionsCreees: number;
+    doublonsIgnores: number;
+    sourceReconnue: string;
+  }> {
+    // Garde-fou n°1 du pipeline : aucune ingestion depuis une source inconnue
+    const sourceReconnue = await this.sourcesAutorisees.reconnaitre(
+      sourceLabel,
+      urlSource,
+    );
+    if (!sourceReconnue) {
+      throw new BadRequestException(
+        `La source « ${sourceLabel} » n'est pas dans la liste blanche. ` +
+          `Ajoutez-la d'abord (POST /collecte/sources) ou utilisez une source autorisée.`,
+      );
+    }
+
     const indicateurs = await this.indicateurRepo.find({
       select: { id: true, libelle: true },
     });
@@ -124,11 +150,22 @@ export class CollecteService {
         valeur: p.valeur,
         dateMesure: p.dateMesure,
         paysOuZone,
-        source: p.source || sourceLabel,
+        // Le libellé officiel de la liste blanche fait foi ; le détail
+        // rapporté par l'IA est conservé à sa suite le cas échéant.
+        source:
+          p.source && p.source !== sourceReconnue.libelle
+            ? `${sourceReconnue.libelle} — ${p.source}`.slice(0, 500)
+            : sourceReconnue.libelle,
+        extrait: p.extrait ?? null,
+        urlSource: urlSource ?? null,
       });
       cree ? creees++ : doublons++;
     }
-    return { propositionsCreees: creees, doublonsIgnores: doublons };
+    return {
+      propositionsCreees: creees,
+      doublonsIgnores: doublons,
+      sourceReconnue: sourceReconnue.libelle,
+    };
   }
 
   private async creerProposition(donnees: {
@@ -137,6 +174,8 @@ export class CollecteService {
     dateMesure: string;
     paysOuZone: string;
     source: string;
+    extrait?: string | null;
+    urlSource?: string | null;
   }): Promise<boolean> {
     const existe = await this.propositionRepo.findOne({
       where: {
@@ -174,6 +213,9 @@ export class CollecteService {
     const propositions = await this.propositionRepo.find({
       where: { paysOuZone: ILike(pays) },
       relations: { indicateur: { critere: { thematique: true } } },
+      // Le tri est indispensable : la sélection « valeur la plus récente par
+      // source » ci-dessous garde la PREMIÈRE occurrence rencontrée.
+      order: { dateMesure: 'DESC' },
     });
 
     // Regroupement par indicateur (toutes années confondues)

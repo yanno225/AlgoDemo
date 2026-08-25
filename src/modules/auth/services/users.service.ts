@@ -6,6 +6,10 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { QueryFailedError, Repository } from 'typeorm';
 import { Role } from '../../../common/enums/role.enum';
+import {
+  HistoriqueRole,
+  TypeDecision,
+} from '../entities/historique-role.entity';
 import { User } from '../entities/user.entity';
 
 /** Code PostgreSQL d'une violation de contrainte d'unicité */
@@ -16,6 +20,8 @@ export class UsersService {
   constructor(
     @InjectRepository(User)
     private readonly userRepo: Repository<User>,
+    @InjectRepository(HistoriqueRole)
+    private readonly historiqueRepo: Repository<HistoriqueRole>,
   ) {}
 
   findByEmail(email: string): Promise<User | null> {
@@ -79,27 +85,72 @@ export class UsersService {
   }
 
   /** ADMIN — valide ou invalide un compte (§9.3) */
-  async valider(id: string, valide: boolean): Promise<User> {
+  async valider(id: string, valide: boolean, decideParUserId: string): Promise<User> {
     const user = await this.findById(id);
     user.compteValide = valide;
-    return this.save(user);
+    const sauvegarde = await this.save(user);
+    await this.tracerDecision({
+      userCibleId: id,
+      decideParUserId,
+      type: TypeDecision.VALIDATION,
+      actif: valide,
+    });
+    return sauvegarde;
   }
 
   /** ADMIN — bloque ou débloque un compte (§9.3) */
-  async bloquer(id: string, bloque: boolean): Promise<User> {
+  async bloquer(id: string, bloque: boolean, decideParUserId: string): Promise<User> {
     const user = await this.findById(id);
     user.estBloque = bloque;
     if (bloque) {
       user.refreshTokenHash = null;
     }
-    return this.save(user);
+    const sauvegarde = await this.save(user);
+    await this.tracerDecision({
+      userCibleId: id,
+      decideParUserId,
+      type: TypeDecision.BLOCAGE,
+      actif: bloque,
+    });
+    return sauvegarde;
   }
 
-  /** ADMIN — attribution/certification point focal, changement de rôle */
-  async changerRole(id: string, role: Role): Promise<User> {
+  /**
+   * ADMIN — attribution/certification point focal, changement de rôle.
+   * L'ancien rôle est capturé AVANT l'écriture : c'est lui qui rend la
+   * décision reconstituable (certification vs rétrogradation).
+   */
+  async changerRole(id: string, role: Role, decideParUserId: string): Promise<User> {
     const user = await this.findById(id);
+    const ancienRole = user.role;
     user.role = role;
-    return this.save(user);
+    const sauvegarde = await this.save(user);
+    await this.tracerDecision({
+      userCibleId: id,
+      decideParUserId,
+      type: TypeDecision.ROLE,
+      ancienRole,
+      nouveauRole: role,
+    });
+    return sauvegarde;
+  }
+
+  /**
+   * Décisions administratives portées sur un compte, la plus récente en tête.
+   * Journal en ajout seul : aucune ligne n'est modifiée ni supprimée.
+   */
+  historique(userCibleId: string): Promise<HistoriqueRole[]> {
+    return this.historiqueRepo.find({
+      where: { userCibleId },
+      order: { decideLe: 'DESC' },
+    });
+  }
+
+  private tracerDecision(
+    decision: Partial<HistoriqueRole> &
+      Pick<HistoriqueRole, 'userCibleId' | 'decideParUserId' | 'type'>,
+  ): Promise<HistoriqueRole> {
+    return this.historiqueRepo.save(this.historiqueRepo.create(decision));
   }
 
   /** Statistiques pour le dashboard back-office (§3.10) */

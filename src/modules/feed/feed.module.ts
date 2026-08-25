@@ -1,12 +1,16 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ReferentielModule } from '../referentiel/referentiel.module';
+import { CommentaireContenu } from './entities/commentaire-contenu.entity';
+import { ReactionCommentaire } from './entities/reaction-commentaire.entity';
 import { Contenu } from './entities/contenu.entity';
 import { HistoriqueLecture } from './entities/historique-lecture.entity';
+import { ReactionContenu } from './entities/reaction-contenu.entity';
 import { Signalement } from './entities/signalement.entity';
 import { FeedController } from './feed.controller';
 import { DebatResumeListener } from './listeners/debat-resume.listener';
 import { FeedService } from './services/feed.service';
+import { InteractionsService } from './services/interactions.service';
 import { SignalementsService } from './services/signalements.service';
 import { TtsService } from './services/tts.service';
 
@@ -18,11 +22,24 @@ import { TtsService } from './services/tts.service';
  */
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Contenu, HistoriqueLecture, Signalement]),
+    TypeOrmModule.forFeature([
+      Contenu,
+      HistoriqueLecture,
+      Signalement,
+      ReactionContenu,
+      CommentaireContenu,
+      ReactionCommentaire,
+    ]),
     ReferentielModule, // fournit Repository<Thematique>
   ],
   controllers: [FeedController],
-  providers: [FeedService, TtsService, SignalementsService, DebatResumeListener],
+  providers: [
+    FeedService,
+    TtsService,
+    SignalementsService,
+    InteractionsService,
+    DebatResumeListener,
+  ],
   // Exporté pour que le back-office (Dev A) agrège contenus/signalements dans le dashboard
   exports: [TypeOrmModule],
 })

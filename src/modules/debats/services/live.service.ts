@@ -1,14 +1,16 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
+import { DataSource, IsNull, Repository } from 'typeorm';
 import { AuthUser } from '../../../common/interfaces/auth-user.interface';
 import { Role } from '../../../common/enums/role.enum';
 import { AffirmationDebat } from '../entities/affirmation-debat.entity';
 import { Debat } from '../entities/debat.entity';
+import { MessageDebat } from '../entities/message-debat.entity';
 import { ParticipationDebat } from '../entities/participation-debat.entity';
 import { SignalementDebat } from '../entities/signalement-debat.entity';
 import { TranscriptionSegment } from '../entities/transcription-segment.entity';
@@ -24,6 +26,21 @@ export interface DecompteVotes {
   affirmationId: string;
   valides: number;
   invalides: number;
+}
+
+/**
+ * Message du fil tel que servi aux clients — le nom est résolu, jamais stocké,
+ * et l'identifiant du compte auteur ne sort pas du serveur (même règle que les
+ * commentaires du feed).
+ */
+export interface MessagePublic {
+  id: string;
+  /** « Prénom N. » — ou « Citoyen » si le compte a été anonymisé. */
+  auteur: string;
+  /** Vrai si l'auteur est du staff certifié (POINT_FOCAL/ADMIN). */
+  certifie: boolean;
+  texte: string;
+  creeLe: Date;
 }
 
 /**
@@ -45,6 +62,11 @@ export class LiveService {
     private readonly signalementRepo: Repository<SignalementDebat>,
     @InjectRepository(TranscriptionSegment)
     private readonly transcriptionRepo: Repository<TranscriptionSegment>,
+    @InjectRepository(MessageDebat)
+    private readonly messageRepo: Repository<MessageDebat>,
+    // Modules découplés par IDs : les noms d'auteurs se lisent en SQL direct.
+    @InjectDataSource()
+    private readonly dataSource: DataSource,
   ) {}
 
   /**
@@ -242,6 +264,126 @@ export class LiveService {
     }
     return this.signalementRepo.save(
       this.signalementRepo.create({ debat, userId: user.id, message: texte }),
+    );
+  }
+
+  // ------- Fil de discussion du live -------
+
+  /** Publie un message dans la salle — persisté, diffusé par la gateway. */
+  async envoyerMessage(
+    debatId: string,
+    user: AuthUser,
+    texte: string,
+  ): Promise<MessagePublic> {
+    const debat = await this.debatRepo.findOneBy({ id: debatId });
+    if (!debat) {
+      throw new NotFoundException(`Débat ${debatId} introuvable`);
+    }
+    if (debat.statut !== StatutDebat.EN_COURS) {
+      throw new BadRequestException('Le débat n’est pas en cours');
+    }
+    const propre = (texte ?? '').trim().slice(0, 500);
+    if (!propre) {
+      throw new BadRequestException('Le message est vide');
+    }
+
+    const message = await this.messageRepo.save(
+      this.messageRepo.create({
+        debat: { id: debatId } as Debat,
+        auteurId: user.id,
+        texte: propre,
+      }),
+    );
+    const profils = await this.profilsPublics([user.id]);
+    return this.versMessagePublic(message, profils);
+  }
+
+  /** Les derniers messages visibles de la salle, en ordre chronologique. */
+  async listerMessages(
+    debatId: string,
+    limite = 50,
+  ): Promise<MessagePublic[]> {
+    const messages = await this.messageRepo.find({
+      where: { debat: { id: debatId }, supprimeLe: IsNull() },
+      order: { creeLe: 'DESC' },
+      take: limite,
+    });
+    messages.reverse(); // requêtés du plus récent, servis du plus ancien
+
+    const profils = await this.profilsPublics([
+      ...new Set(messages.map((message) => message.auteurId)),
+    ]);
+    return messages.map((message) => this.versMessagePublic(message, profils));
+  }
+
+  /**
+   * Modération a posteriori : le staff masque un message pour toute la salle.
+   * Le contenu reste en base (traçabilité), il ne sort plus jamais du serveur.
+   */
+  async supprimerMessage(
+    messageId: string,
+    user: AuthUser,
+  ): Promise<{ debatId: string }> {
+    if (user.role !== Role.ADMIN && user.role !== Role.POINT_FOCAL) {
+      throw new ForbiddenException(
+        'Seul le staff peut supprimer un message du fil',
+      );
+    }
+    const message = await this.messageRepo.findOne({
+      where: { id: messageId },
+      relations: { debat: true },
+    });
+    if (!message) {
+      throw new NotFoundException(`Message ${messageId} introuvable`);
+    }
+    if (!message.supprimeLe) {
+      message.supprimeLe = new Date();
+      message.supprimePar = user.id;
+      await this.messageRepo.save(message);
+    }
+    return { debatId: message.debat.id };
+  }
+
+  private versMessagePublic(
+    message: MessageDebat,
+    profils: Map<string, { auteur: string; certifie: boolean }>,
+  ): MessagePublic {
+    const profil = profils.get(message.auteurId);
+    return {
+      id: message.id,
+      auteur: profil?.auteur ?? 'Citoyen',
+      certifie: profil?.certifie ?? false,
+      texte: message.texte,
+      creeLe: message.creeLe,
+    };
+  }
+
+  /**
+   * Noms d'affichage publics : « Prénom N. » — jamais le nom complet dans un
+   * espace public, « Citoyen » pour un compte anonymisé (RG-USR-07,
+   * rétroactif car résolu à chaque lecture). Le badge « certifié » vient du
+   * rôle du compte, lui aussi lu à l'instant T.
+   */
+  private async profilsPublics(
+    userIds: string[],
+  ): Promise<Map<string, { auteur: string; certifie: boolean }>> {
+    if (userIds.length === 0) return new Map();
+    const lignes = await this.dataSource.query<
+      { id: string; prenom: string; nom: string; anonymise: boolean; role: Role }[]
+    >(
+      `SELECT id, prenom, nom, anonymise, role FROM users WHERE id = ANY($1::uuid[])`,
+      [userIds],
+    );
+    return new Map(
+      lignes.map((u) => [
+        u.id,
+        {
+          auteur: u.anonymise
+            ? 'Citoyen'
+            : `${u.prenom} ${u.nom ? `${u.nom[0].toUpperCase()}.` : ''}`.trim(),
+          certifie: u.role === Role.ADMIN || u.role === Role.POINT_FOCAL,
+        },
+      ]),
     );
   }
 

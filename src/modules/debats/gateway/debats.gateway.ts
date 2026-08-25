@@ -24,9 +24,11 @@ import { DecompteVotes, LiveService } from '../services/live.service';
  * Même secret et même payload que le RolesGuard HTTP (contrat n°1).
  *
  * Événements CLIENT → SERVEUR :
- *   rejoindre  { debatId }                  → rejoint la salle, reçoit l'état courant
- *   voter      { affirmationId, valide }    → vote valider/invalider (revote autorisé)
- *   signaler   { debatId, message }         → signale une fausse information au staff
+ *   rejoindre          { debatId }               → rejoint la salle, reçoit l'état courant
+ *   voter              { affirmationId, valide } → vote valider/invalider (revote autorisé)
+ *   message            { debatId, texte }        → publie dans le fil de discussion
+ *   message.supprimer  { messageId }             → modération du fil (staff)
+ *   signaler           { debatId, message }      → signale une fausse information au staff
  *
  * Événements SERVEUR → CLIENT (salle debat:{id}) :
  *   participants.maj      { nombre }
@@ -35,6 +37,8 @@ import { DecompteVotes, LiveService } from '../services/live.service';
  *   affirmation.nouvelle  { id, texte }
  *   vote.maj              { affirmationId, valides, invalides }
  *   affirmation.fermee    { affirmationId, valides, invalides }
+ *   message.nouveau       { id, auteur, certifie, texte, creeLe }
+ *   message.supprime      { messageId }
  *   signalement.nouveau   { id, message, de } — salle staff uniquement
  */
 @WebSocketGateway({ namespace: 'debats', cors: { origin: '*' } })
@@ -113,6 +117,7 @@ export class DebatsGateway implements OnGatewayConnection, OnGatewayDisconnect {
         debat: { id: debat.id, titre: debat.titre, statut: debat.statut },
         roleParticipation,
         affirmations: await this.liveService.etatDesVotes(debat.id),
+        messages: await this.liveService.listerMessages(debat.id),
       };
     } catch (e) {
       return { ok: false, message: e instanceof Error ? e.message : 'Erreur' };
@@ -134,6 +139,48 @@ export class DebatsGateway implements OnGatewayConnection, OnGatewayDisconnect {
       // Tous les écrans de la salle voient le décompte bouger en direct
       this.server.to(`debat:${debatId}`).emit('vote.maj', decompte);
       return { ok: true, decompte };
+    } catch (e) {
+      return { ok: false, message: e instanceof Error ? e.message : 'Erreur' };
+    }
+  }
+
+  @SubscribeMessage('message')
+  async message(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() body: { debatId?: string; texte?: string },
+  ) {
+    const user = client.data.user as AuthUser;
+    try {
+      const envoye = await this.liveService.envoyerMessage(
+        body?.debatId ?? '',
+        user,
+        body?.texte ?? '',
+      );
+      // Toute la salle voit le message arriver — l'auteur compris, qui se
+      // reconnaît grâce à l'id retourné dans son accusé de réception.
+      this.server.to(`debat:${body!.debatId}`).emit('message.nouveau', envoye);
+      return { ok: true, envoye };
+    } catch (e) {
+      return { ok: false, message: e instanceof Error ? e.message : 'Erreur' };
+    }
+  }
+
+  @SubscribeMessage('message.supprimer')
+  async supprimerMessage(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() body: { messageId?: string },
+  ) {
+    const user = client.data.user as AuthUser;
+    try {
+      const { debatId } = await this.liveService.supprimerMessage(
+        body?.messageId ?? '',
+        user,
+      );
+      // Le message disparaît immédiatement de tous les écrans de la salle.
+      this.server
+        .to(`debat:${debatId}`)
+        .emit('message.supprime', { messageId: body!.messageId });
+      return { ok: true };
     } catch (e) {
       return { ok: false, message: e instanceof Error ? e.message : 'Erreur' };
     }

@@ -52,10 +52,15 @@ export class CollecteController {
   @Post('ingerer-texte')
   @ApiOperation({
     summary:
-      'Ingérer un texte (article/rapport) → l’IA en extrait des valeurs → propositions',
+      'Ingérer un texte (article/rapport) → contrôle liste blanche → l’IA en extrait des valeurs avec citations → propositions',
   })
   ingererTexte(@Body() dto: IngererTexteDto) {
-    return this.collecteService.ingererTexte(dto.texte, dto.source, dto.paysOuZone);
+    return this.collecteService.ingererTexte(
+      dto.texte,
+      dto.source,
+      dto.paysOuZone,
+      dto.urlSource,
+    );
   }
 
   @Get('indicateur/:id/analyse')

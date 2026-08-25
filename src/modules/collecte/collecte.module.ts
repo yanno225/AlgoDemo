@@ -4,11 +4,14 @@ import { FichePaysModule } from '../fiche-pays/fiche-pays.module';
 import { IaModule } from '../ia/ia.module';
 import { ReferentielModule } from '../referentiel/referentiel.module';
 import { CollecteController } from './controllers/collecte.controller';
+import { SourcesAutoriseesController } from './controllers/sources-autorisees.controller';
 import { PropositionValeur } from './entities/proposition-valeur.entity';
+import { SourceAutorisee } from './entities/source-autorisee.entity';
 import { BanqueMondialeConnector } from './services/banque-mondiale.connector';
 import { CollecteService } from './services/collecte.service';
 import { OmsConnector } from './services/oms.connector';
 import { SOURCE_CONNECTORS } from './services/source-connector.interface';
+import { SourcesAutoriseesService } from './services/sources-autorisees.service';
 
 /**
  * Module Collecte / Veille (CDC §3.8) — Dev B.
@@ -22,14 +25,15 @@ import { SOURCE_CONNECTORS } from './services/source-connector.interface';
  */
 @Module({
   imports: [
-    TypeOrmModule.forFeature([PropositionValeur]),
+    TypeOrmModule.forFeature([PropositionValeur, SourceAutorisee]),
     ReferentielModule, // repository Indicateur
     FichePaysModule, // repository ValeurIndicateur (cible des validations)
     IaModule, // extraction de valeurs depuis un texte
   ],
-  controllers: [CollecteController],
+  controllers: [CollecteController, SourcesAutoriseesController],
   providers: [
     CollecteService,
+    SourcesAutoriseesService,
     BanqueMondialeConnector,
     OmsConnector,
     {

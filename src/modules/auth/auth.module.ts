@@ -3,10 +3,12 @@ import { ConfigService } from '@nestjs/config';
 import { JwtModule, JwtModuleOptions } from '@nestjs/jwt';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AuthController } from './auth.controller';
+import { HistoriqueRole } from './entities/historique-role.entity';
 import { User } from './entities/user.entity';
 import { AuthService } from './services/auth.service';
 import { MailService } from './services/mail.service';
 import { OtpService } from './services/otp.service';
+import { UserStatsService } from './services/user-stats.service';
 import { UsersService } from './services/users.service';
 import { UsersAdminController } from './users-admin.controller';
 
@@ -18,7 +20,7 @@ import { UsersAdminController } from './users-admin.controller';
  */
 @Module({
   imports: [
-    TypeOrmModule.forFeature([User]),
+    TypeOrmModule.forFeature([User, HistoriqueRole]),
     JwtModule.registerAsync({
       global: true,
       inject: [ConfigService],
@@ -35,7 +37,13 @@ import { UsersAdminController } from './users-admin.controller';
     }),
   ],
   controllers: [AuthController, UsersAdminController],
-  providers: [AuthService, UsersService, OtpService, MailService],
+  providers: [
+    AuthService,
+    UsersService,
+    UserStatsService,
+    OtpService,
+    MailService,
+  ],
   exports: [UsersService],
 })
 export class AuthModule {}

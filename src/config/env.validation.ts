@@ -44,10 +44,15 @@ class EnvironmentVariables {
   @IsString()
   DB_NAME!: string;
 
-  // Réservé aux futurs modules IA (synthèses fiche-pays, résumés de débats)
+  // Service IA cible (Claude). Dès qu'une clé est présente, AnthropicIaService
+  // prend le relais (prioritaire sur Mistral et le mode simulation).
   @IsOptional()
   @IsString()
   ANTHROPIC_API_KEY?: string;
+
+  @IsOptional()
+  @IsString()
+  ANTHROPIC_MODEL: string = 'claude-opus-5';
 
   @IsString()
   JWT_ACCESS_SECRET!: string;
