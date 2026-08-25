@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { useIsFocused } from '@react-navigation/native';
 import {
   StyleSheet,
   View,
@@ -52,6 +53,9 @@ export default function FeedScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
+  // Quitter l'onglet coupe TOUT (vidéo, son, lecture vocale) : une carte
+  // n'est « active » que si le feed a réellement le focus.
+  const isFocused = useIsFocused();
   const searchInputRef = useRef<TextInput>(null);
 
   const [items, setItems] = useState<FeedItem[]>([]);
@@ -184,13 +188,13 @@ export default function FeedScreen() {
         index={index}
         scrollY={scrollY}
         itemHeight={itemHeight}
-        isActive={index === activeIndex}
+        isActive={index === activeIndex && isFocused}
         topInset={insets.top + 96}
         bottomInset={TAB_BAR_CLEARANCE + insets.bottom}
         initiallyLiked={myLikes.has(item.id)}
       />
     ),
-    [activeIndex, insets.bottom, insets.top, itemHeight, myLikes, scrollY]
+    [activeIndex, isFocused, insets.bottom, insets.top, itemHeight, myLikes, scrollY]
   );
 
   // Chaque élément a une hauteur fixe : la fournir évite à la liste de

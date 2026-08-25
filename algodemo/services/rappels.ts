@@ -59,8 +59,13 @@ export async function listerRappels(): Promise<Record<string, string>> {
   return rappels;
 }
 
+/** Marge d'annonce : le rappel sonne AVANT le début, le temps de rejoindre. */
+const MARGE_AVANT_DIRECT_MS = 5 * 60_000;
+
 /**
- * Programme le rappel à l'heure prévue du débat. Renvoie l'identifiant de la
+ * Programme le rappel 5 minutes AVANT l'heure prévue du débat — le temps
+ * d'ouvrir l'application et de s'installer. Si le direct commence dans moins
+ * de 5 minutes, le rappel sonne à l'heure pile. Renvoie l'identifiant de la
  * notification, ou null si l'heure est déjà passée.
  */
 export async function programmerRappel(debat: {
@@ -68,15 +73,21 @@ export async function programmerRappel(debat: {
   title: string;
   startsAt: string;
   reminderTitle: string;
-  reminderBody: string;
+  /** « … commence dans 5 minutes » — le message de la sonnerie anticipée. */
+  reminderBodySoon: string;
+  /** « … commence maintenant » — quand il reste moins de 5 minutes. */
+  reminderBodyNow: string;
 }): Promise<string | null> {
-  const date = new Date(debat.startsAt);
-  if (date.getTime() <= Date.now()) return null;
+  const debut = new Date(debat.startsAt).getTime();
+  if (debut <= Date.now()) return null;
+
+  const enAvance = debut - MARGE_AVANT_DIRECT_MS > Date.now();
+  const date = new Date(enAvance ? debut - MARGE_AVANT_DIRECT_MS : debut);
 
   return Notifications.scheduleNotificationAsync({
     content: {
       title: debat.reminderTitle,
-      body: debat.reminderBody,
+      body: enAvance ? debat.reminderBodySoon : debat.reminderBodyNow,
       sound: true,
       data: { type: TYPE_RAPPEL, debatId: debat.id },
     },

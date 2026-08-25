@@ -112,7 +112,8 @@ export default function DebatesScreen() {
         title: debate.title,
         startsAt: debate.startsAt,
         reminderTitle: t('debats.reminderTitle'),
-        reminderBody: t('debats.reminderBody', { title: debate.title }),
+        reminderBodySoon: t('debats.reminderBodySoon', { title: debate.title }),
+        reminderBodyNow: t('debats.reminderBody', { title: debate.title }),
       });
       if (notificationId) {
         setReminders((current) => ({ ...current, [debate.id]: notificationId }));
