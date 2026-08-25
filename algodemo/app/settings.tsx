@@ -23,7 +23,12 @@ type ItemTone = 'primary' | 'secondary';
 interface SettingSection {
   key: string;
   tone: ItemTone;
-  items: { key: string; icon: keyof typeof Ionicons.glyphMap }[];
+  items: {
+    key: string;
+    icon: keyof typeof Ionicons.glyphMap;
+    /** Écran réel — les entrées sans route annoncent « bientôt disponible ». */
+    route?: string;
+  }[];
 }
 
 const SECTIONS: SettingSection[] = [
@@ -34,14 +39,14 @@ const SECTIONS: SettingSection[] = [
       { key: 'privacyPolicy', icon: 'shield-checkmark-outline' },
       { key: 'privacyCenter', icon: 'eye-outline' },
       { key: 'accountPrivacy', icon: 'lock-closed-outline' },
-      { key: 'anonymisation', icon: 'eye-off-outline' },
+      { key: 'anonymisation', icon: 'eye-off-outline', route: '/parametres/anonymisation' },
     ],
   },
   {
     key: 'security',
     tone: 'secondary',
     items: [
-      { key: 'accountSecurity', icon: 'shield-outline' },
+      { key: 'accountSecurity', icon: 'shield-outline', route: '/parametres/securite' },
       { key: 'myData', icon: 'sync-outline' },
     ],
   },
@@ -49,7 +54,7 @@ const SECTIONS: SettingSection[] = [
     key: 'notifications',
     tone: 'primary',
     items: [
-      { key: 'notifications', icon: 'notifications-outline' },
+      { key: 'notifications', icon: 'notifications-outline', route: '/parametres/notifications' },
       { key: 'contentPreferences', icon: 'options-outline' },
       { key: 'interests', icon: 'star-outline' },
     ],
@@ -162,7 +167,9 @@ export default function SettingsScreen() {
                       <View style={[styles.divider, { backgroundColor: colors.borderLight }]} />
                     )}
                     <PressableScale
-                      onPress={() => announce(item.key)}
+                      onPress={() =>
+                        item.route ? router.push(item.route) : announce(item.key)
+                      }
                       scaleTo={0.99}
                       accessibilityRole="button"
                       accessibilityLabel={t(`settings.items.${item.key}`)}

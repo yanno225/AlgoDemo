@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
 import * as Speech from 'expo-speech';
+import { dire } from '../services/voix';
 import * as Haptics from 'expo-haptics';
 import Animated, {
   useAnimatedStyle,
@@ -68,9 +69,7 @@ export default function OnboardingScreen() {
     // Activer l'audio le démontre aussitôt : le message d'accueil est lu à
     // voix haute. C'est le geste le plus parlant pour un public malvoyant.
     if (willEnable) {
-      Speech.speak(`${t('onboarding.title')}. ${t('onboarding.subtitle')}`, {
-        language: 'fr',
-      });
+      void dire(`${t('onboarding.title')}. ${t('onboarding.subtitle')}`);
     } else {
       Speech.stop();
     }

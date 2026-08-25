@@ -10,6 +10,8 @@ import { apiClient } from './client';
 
 export type ConsultationStatus = 'upcoming' | 'open' | 'closed';
 export type ConsultationFilter = 'ouvertes' | 'cloturees' | 'toutes';
+/** SONDAGE = question rapide (onglet dédié) — même moteur, même vote secret. */
+export type ConsultationType = 'CONSULTATION' | 'SONDAGE';
 
 interface BackendOption {
   id: string;
@@ -18,6 +20,7 @@ interface BackendOption {
 
 interface BackendConsultation {
   id: string;
+  type: ConsultationType;
   titre: string;
   description: string;
   resumeVulgarise: string;
@@ -34,6 +37,7 @@ export interface ConsultationOption {
 
 export interface Consultation {
   id: string;
+  type: ConsultationType;
   title: string;
   description: string;
   plainSummary: string;
@@ -62,6 +66,7 @@ function mapConsultation(backend: BackendConsultation): Consultation {
 
   return {
     id: backend.id,
+    type: backend.type,
     title: backend.titre,
     description: backend.description,
     plainSummary: backend.resumeVulgarise,
@@ -77,12 +82,52 @@ function mapConsultation(backend: BackendConsultation): Consultation {
   };
 }
 
-/** Liste des consultations, filtrée par état. Sans filtre : toutes. */
+/** Liste des consultations, filtrée par état et par type. */
 export async function listConsultations(
-  filter: ConsultationFilter = 'toutes'
+  filter: ConsultationFilter = 'toutes',
+  type?: ConsultationType
 ): Promise<Consultation[]> {
   const { data } = await apiClient.get<BackendConsultation[]>('/consultations', {
-    params: { statut: filter },
+    params: { statut: filter, ...(type ? { type } : {}) },
   });
   return data.map(mapConsultation);
+}
+
+/**
+ * Dépose un bulletin — vote unique et SECRET (émargement et urne séparés côté
+ * serveur) : la réponse ne renvoie jamais le choix déposé.
+ */
+export async function voteConsultation(
+  consultationId: string,
+  optionId: string
+): Promise<void> {
+  await apiClient.post(`/consultations/${consultationId}/vote`, { optionId });
+}
+
+/** Ai-je déjà émargé ? (le serveur ne dit jamais POUR QUOI on a voté) */
+export async function hasVoted(consultationId: string): Promise<boolean> {
+  const { data } = await apiClient.get<{ aVote: boolean }>(
+    `/consultations/${consultationId}/a-vote`
+  );
+  return data.aVote;
+}
+
+export interface ConsultationResult {
+  optionId: string;
+  label: string;
+  votes: number;
+}
+
+/** Résultats agrégés — disponibles seulement après publication par un admin. */
+export async function getResults(
+  consultationId: string
+): Promise<ConsultationResult[]> {
+  const { data } = await apiClient.get<
+    { optionId: string; libelle: string; nombreVotes: number }[]
+  >(`/consultations/${consultationId}/resultats`);
+  return data.map((ligne) => ({
+    optionId: ligne.optionId,
+    label: ligne.libelle,
+    votes: ligne.nombreVotes,
+  }));
 }

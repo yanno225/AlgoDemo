@@ -261,6 +261,7 @@ const DomainSection: React.FC<{
   color: string;
   onSelect: (indicator: CountryIndicator, color: string) => void;
 }> = ({ domain, color, onSelect }) => {
+  const { t } = useTranslation();
   const { colors, getFontSize } = useAccessibility();
 
   return (
@@ -321,7 +322,9 @@ const DomainSection: React.FC<{
                 },
               ]}
             >
-              {latestSource(indicator)}
+              {latestSource(indicator)
+                ? `${t('pays.sourcePrefix')} : ${latestSource(indicator)}`
+                : ''}
             </Text>
 
             {/* Repère d'affordance : la carte s'ouvre. */}

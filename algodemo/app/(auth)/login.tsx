@@ -44,7 +44,20 @@ export default function LoginScreen() {
     setIsLoading(true);
 
     try {
-      const result = await authService.login(emailOrPhone.trim(), password);
+      const email = emailOrPhone.trim().toLowerCase();
+      const result = await authService.login(email, password);
+
+      // Confirmation par email à chaque connexion (§9.3) : le serveur vient
+      // d'envoyer un code — on garde les identifiants en mémoire vive le
+      // temps de la saisie, jamais dans les paramètres de navigation.
+      if (authService.isOtpRequired(result)) {
+        authService.rememberPendingLogin(email, password);
+        router.push({
+          pathname: '/otp',
+          params: { destination: email, mode: 'connexion' },
+        });
+        return;
+      }
 
       // Le compte a activé le second facteur : le parcours 2FA sera branché
       // avec l'écran dédié. En attendant, on l'indique clairement.

@@ -1,6 +1,6 @@
 import React from 'react';
 import { StyleSheet, View, Text, ScrollView, Switch } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -16,7 +16,6 @@ import { Button } from '../../components/ui/Button';
 import { PressableScale } from '../../components/ui/PressableScale';
 import { BrandLogo } from '../../components/ui/BrandLogo';
 import { SectionHeader } from '../../components/ui/SectionHeader';
-import { CircularProgress } from '../../components/ui/CircularProgress';
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
 import { enterListItem, enterSection } from '../../components/ui/motion';
 import * as authService from '../../services/api/auth';
@@ -53,6 +52,40 @@ export default function ProfileScreen() {
   } = useAccessibility();
 
   const [isLogoutConfirmVisible, setLogoutConfirmVisible] = React.useState(false);
+
+  // Compteurs réels, comptés par le serveur — rechargés à chaque retour sur
+  // l'onglet : voter ou signaler pendant la session met le profil à jour.
+  const [stats, setStats] = React.useState<authService.MyStats | null>(null);
+  useFocusEffect(
+    React.useCallback(() => {
+      if (!isAuthenticated) {
+        setStats(null);
+        return;
+      }
+      let cancelled = false;
+      authService
+        .getMyStats()
+        .then((mesStats) => {
+          if (!cancelled) setStats(mesStats);
+        })
+        .catch(() => {});
+      return () => {
+        cancelled = true;
+      };
+    }, [isAuthenticated])
+  );
+
+  const totalVotes = stats ? stats.votesConsultations + stats.votesDebats : null;
+  const totalContributions = stats
+    ? stats.avisDeposes +
+      stats.signalementsEmis +
+      stats.prisesDeParole +
+      stats.votesConsultations +
+      stats.votesDebats
+    : null;
+  const anneeInscription = user?.createdAt
+    ? new Date(user.createdAt).getFullYear()
+    : null;
 
   const handleLogout = async () => {
     setLogoutConfirmVisible(false);
@@ -187,15 +220,17 @@ export default function ProfileScreen() {
                 <MaterialCommunityIcons name="check-decagram" size={19} color={colors.verified} />
               </View>
 
-              <Text
-                style={{
-                  color: colors.textSecondary,
-                  fontSize: getFontSize(typography.sizes.bodySmall),
-                  fontFamily: typography.families.body,
-                }}
-              >
-                {t('profile.memberSince', { year: 2022 })}
-              </Text>
+              {anneeInscription !== null && (
+                <Text
+                  style={{
+                    color: colors.textSecondary,
+                    fontSize: getFontSize(typography.sizes.bodySmall),
+                    fontFamily: typography.families.body,
+                  }}
+                >
+                  {t('profile.memberSince', { year: anneeInscription })}
+                </Text>
+              )}
             </Animated.View>
 
             {/* ─── Statistiques ──────────────────────────────────────── */}
@@ -223,7 +258,7 @@ export default function ProfileScreen() {
                     },
                   ]}
                 >
-                  142
+                  {totalContributions ?? '—'}
                 </Text>
               </View>
 
@@ -238,7 +273,7 @@ export default function ProfileScreen() {
                     },
                   ]}
                 >
-                  {t('profile.reliability').toUpperCase()}
+                  {t('profile.approvedOpinions').toUpperCase()}
                 </Text>
                 <View style={styles.statValueRow}>
                   <Text
@@ -251,7 +286,7 @@ export default function ProfileScreen() {
                       },
                     ]}
                   >
-                    98%
+                    {stats?.avisApprouves ?? '—'}
                   </Text>
                   <MaterialCommunityIcons name="shield-check" size={18} color={colors.secondary} />
                 </View>
@@ -281,24 +316,26 @@ export default function ProfileScreen() {
             <Animated.View entering={enterListItem(3)} style={styles.section}>
               <SectionHeader title={t('profile.activityTitle')} style={styles.sectionHeader} />
 
+              {/* Compteurs comptés par le serveur — plus d'anneaux à
+                  pourcentages inventés : un vrai zéro vaut mieux qu'un faux 82 %. */}
               <View style={[styles.activityCard, { backgroundColor: colors.surface }, shadows.md]}>
-                <CircularProgress
-                  percentage={82}
+                <CompteurActivite
+                  icone="checkbox-outline"
+                  valeur={totalVotes}
                   label={t('profile.activity.votes')}
-                  color={colors.primary}
-                  delay={100}
+                  tint={colors.primary}
                 />
-                <CircularProgress
-                  percentage={65}
-                  label={t('profile.activity.watch')}
-                  color={colors.secondary}
-                  delay={200}
-                />
-                <CircularProgress
-                  percentage={48}
+                <CompteurActivite
+                  icone="radio-outline"
+                  valeur={stats?.debatsRejoints ?? null}
                   label={t('profile.activity.lives')}
-                  color={colors.info}
-                  delay={300}
+                  tint={colors.secondary}
+                />
+                <CompteurActivite
+                  icone="megaphone-outline"
+                  valeur={stats?.signalementsEmis ?? null}
+                  label={t('profile.activity.reports')}
+                  tint={colors.info}
                 />
               </View>
             </Animated.View>
@@ -340,11 +377,15 @@ export default function ProfileScreen() {
           </Animated.View>
         )}
 
-        {/* ─── Assistant IA (à venir) ────────────────────────────────
-            Le module a quitté la barre d'onglets, remplacé par la fiche pays.
-            Il reste annoncé ici en attendant sa réintroduction en V2. */}
+        {/* ─── Assistant IA — vérification des faits ───────────────── */}
         <Animated.View entering={enterListItem(4)} style={styles.section}>
-          <View style={[styles.aiCard, { backgroundColor: colors.surface }, shadows.md]}>
+          <PressableScale
+            onPress={() => router.push('/assistant')}
+            scaleTo={motion.scale.card}
+            haptic="light"
+            accessibilityRole="button"
+            accessibilityLabel={t('ai.profileEntry')}
+            style={[styles.aiCard, { backgroundColor: colors.surface }, shadows.md]}>
             <LinearGradient
               colors={thematicGradients.brand}
               start={{ x: 0, y: 0 }}
@@ -377,19 +418,8 @@ export default function ProfileScreen() {
               </Text>
             </View>
 
-            <View style={[styles.comingSoonBadge, { backgroundColor: withAlpha(colors.secondary, 0.16) }]}>
-              <Text
-                style={{
-                  color: colors.secondary,
-                  fontSize: getFontSize(typography.sizes.micro),
-                  fontFamily: typography.families.bodyBold,
-                  letterSpacing: 0.4,
-                }}
-              >
-                {t('ai.comingSoon').toUpperCase()}
-              </Text>
-            </View>
-          </View>
+            <Ionicons name="chevron-forward" size={18} color={colors.textTertiary} />
+          </PressableScale>
         </Animated.View>
 
         {/* ─── Accessibilité ─────────────────────────────────────────── */}
@@ -516,6 +546,42 @@ export default function ProfileScreen() {
 }
 
 // ─── Sous-composants ────────────────────────────────────────────────
+/** Un compteur d'activité réel — « — » tant que le serveur n'a pas répondu. */
+const CompteurActivite: React.FC<{
+  icone: keyof typeof Ionicons.glyphMap;
+  valeur: number | null;
+  label: string;
+  tint: string;
+}> = ({ icone, valeur, label, tint }) => {
+  const { colors, getFontSize } = useAccessibility();
+  return (
+    <View style={styles.compteur}>
+      <View style={[styles.compteurIcone, { backgroundColor: withAlpha(tint, 0.12) }]}>
+        <Ionicons name={icone} size={18} color={tint} />
+      </View>
+      <Text
+        style={{
+          color: colors.textPrimary,
+          fontSize: getFontSize(typography.sizes.h2),
+          fontFamily: typography.families.heading,
+        }}
+      >
+        {valeur ?? '—'}
+      </Text>
+      <Text
+        style={{
+          color: colors.textSecondary,
+          fontSize: getFontSize(typography.sizes.micro),
+          fontFamily: typography.families.bodyMedium,
+          textAlign: 'center',
+        }}
+      >
+        {label}
+      </Text>
+    </View>
+  );
+};
+
 const Badge: React.FC<{
   icon: keyof typeof MaterialCommunityIcons.glyphMap;
   label: string;
@@ -735,6 +801,19 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.full,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  compteur: {
+    flex: 1,
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  compteurIcone: {
+    width: 38,
+    height: 38,
+    borderRadius: borderRadius.full,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 2,
   },
   activityCard: {
     flexDirection: 'row',

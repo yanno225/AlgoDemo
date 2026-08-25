@@ -1,11 +1,12 @@
-import React, { useState } from 'react';
-import { StyleSheet, View, Text, FlatList } from 'react-native';
+import React, { useCallback, useState } from 'react';
+import { StyleSheet, View, Text, FlatList, Alert } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated from 'react-native-reanimated';
 import { useAccessibility } from '../../../hooks/useAccessibility';
-import { PressableScale } from '../../../components/ui/PressableScale';
+import { useAuthStore } from '../../../stores/authStore';
 import { TAB_BAR_CLEARANCE } from '../../../components/ui/Screen';
 import { enterListItem, enterFade } from '../../../components/ui/motion';
 import {
@@ -16,67 +17,141 @@ import {
   SignalementCard,
   Signalement,
 } from '../../../components/feature/participation/SignalementCard';
-import { spacing, typography, motion, borderRadius, withAlpha } from '../../../constants/theme';
+import {
+  createReport,
+  listMyReports,
+  listRecentReports,
+  type CitizenReport,
+} from '../../../services/api/participation';
+import { spacing, typography, borderRadius, withAlpha } from '../../../constants/theme';
 
-// TODO(backend) : remplacer par GET /signalements?commune=…
-const INITIAL_SIGNALEMENTS: Signalement[] = [
-  {
-    id: 'sig_1',
-    title: 'Affaissement de chaussée',
-    description:
-      'Signalé au 24 Rue de la République. Risque pour les cyclistes, nécessite une intervention rapide.',
-    category: 'Voirie',
-    time: 'Il y a 2 h',
-    status: 'progress',
-    imageUri: 'https://images.unsplash.com/photo-1515162305285-0293e4767cc2?q=80&w=800',
-    supports: 12,
-    comments: 3,
-  },
-  {
-    id: 'sig_2',
-    title: "Panneau d'affichage hors service",
-    description:
-      "Le panneau d'information numérique de la Place de la Mairie n'affiche plus les horaires de bus.",
-    category: 'Éclairage',
-    time: 'Hier',
-    status: 'resolved',
-    imageUri: 'https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?q=80&w=800',
-    supports: 45,
-    comments: 8,
-  },
-];
+/** « Il y a 2 h », « Hier », « 12 août » — l'horodatage court des cartes. */
+function formatRelatif(iso: string): string {
+  const ecartMs = Date.now() - new Date(iso).getTime();
+  const minutes = Math.floor(ecartMs / 60_000);
+  if (minutes < 1) return "À l'instant";
+  if (minutes < 60) return `Il y a ${minutes} min`;
+  const heures = Math.floor(minutes / 60);
+  if (heures < 24) return `Il y a ${heures} h`;
+  if (heures < 48) return 'Hier';
+  return new Date(iso).toLocaleDateString('fr-FR', {
+    day: 'numeric',
+    month: 'long',
+  });
+}
 
 export default function SignalementsScreen() {
   const { t } = useTranslation();
   const { colors, getFontSize } = useAccessibility();
+  const { isAuthenticated } = useAuthStore();
   const insets = useSafeAreaInsets();
+  const router = useRouter();
 
-  const [signalements, setSignalements] = useState(INITIAL_SIGNALEMENTS);
+  const [recents, setRecents] = useState<CitizenReport[]>([]);
+  const [miens, setMiens] = useState<CitizenReport[]>([]);
+  const [isSending, setIsSending] = useState(false);
   const [confirmation, setConfirmation] = useState('');
 
-  const handleSubmit = (draft: SignalementDraft) => {
-    setSignalements((current) => [
-      {
-        id: `sig_${Date.now()}`,
-        title: draft.category,
+  const charger = useCallback(() => {
+    listRecentReports().then(setRecents).catch(() => {});
+    if (useAuthStore.getState().isAuthenticated) {
+      listMyReports().then(setMiens).catch(() => {});
+    } else {
+      setMiens([]);
+    }
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      charger();
+    }, [charger])
+  );
+
+  const handleSubmit = async (draft: SignalementDraft) => {
+    if (!isAuthenticated) {
+      Alert.alert(
+        t('participation.signalements.formTitle'),
+        t('participation.signalements.loginRequired'),
+        [
+          { text: t('common.cancel'), style: 'cancel' },
+          { text: t('liveRoom.signIn'), onPress: () => router.push('/login') },
+        ]
+      );
+      return;
+    }
+
+    setIsSending(true);
+    try {
+      const cree = await createReport({
+        categoryKey: draft.categoryKey,
         description: draft.description,
-        category: draft.category,
-        time: "À l'instant",
-        status: 'progress',
-        imageUri: draft.photoUri ?? undefined,
-        supports: 0,
-        comments: 0,
-      },
-      ...current,
-    ]);
-    setConfirmation(t('participation.signalements.sent'));
-    setTimeout(() => setConfirmation(''), 4000);
+        address: draft.location,
+        latitude: draft.latitude,
+        longitude: draft.longitude,
+        photoUri: draft.photoUri,
+      });
+      setMiens((current) => [cree, ...current]);
+      setConfirmation(t('participation.signalements.sent'));
+      setTimeout(() => setConfirmation(''), 4000);
+    } catch {
+      Alert.alert(
+        t('participation.signalements.formTitle'),
+        t('participation.signalements.sendError')
+      );
+    } finally {
+      setIsSending(false);
+    }
   };
+
+  const versCarte = (report: CitizenReport): Signalement => ({
+    id: report.id,
+    title: report.description,
+    description: t('participation.signalements.reportedAt', {
+      address: report.address,
+    }),
+    category: t(`participation.signalements.categories.${report.categoryKey}`),
+    time: formatRelatif(report.createdAt),
+    status: report.status === 'RESOLU' ? 'resolved' : 'progress',
+    statusLabel:
+      report.status === 'RECU'
+        ? t('participation.status.received')
+        : report.status === 'REJETE'
+          ? t('participation.status.rejected')
+          : undefined,
+    imageUri: report.photoUrl ?? undefined,
+  });
+
+  // Mes signalements d'abord (suivi de dossier), puis le fil public — sans
+  // doublon : un signalement à moi n'apparaît qu'une fois.
+  const idsMiens = new Set(miens.map((report) => report.id));
+  const filPublic = recents.filter((report) => !idsMiens.has(report.id));
+
+  const sections: { cle: string; titre: string; items: CitizenReport[] }[] = [
+    ...(miens.length > 0
+      ? [
+          {
+            cle: 'miens',
+            titre: t('participation.signalements.myTitle'),
+            items: miens,
+          },
+        ]
+      : []),
+    {
+      cle: 'recents',
+      titre: t('participation.signalements.recentTitle'),
+      items: filPublic,
+    },
+  ];
+
+  const lignes = sections.flatMap((section) => [
+    { type: 'entete' as const, cle: section.cle, titre: section.titre },
+    ...section.items.map((item) => ({ type: 'carte' as const, cle: item.id, item })),
+  ]);
 
   return (
     <FlatList
-      data={signalements}
-      keyExtractor={(item) => item.id}
+      data={lignes}
+      keyExtractor={(ligne) => ligne.cle}
       style={{ backgroundColor: colors.background }}
       contentContainerStyle={[
         styles.content,
@@ -86,7 +161,7 @@ export default function SignalementsScreen() {
       keyboardShouldPersistTaps="handled"
       ListHeaderComponent={
         <View>
-          <SignalementForm onSubmit={handleSubmit} />
+          <SignalementForm onSubmit={(draft) => void handleSubmit(draft)} isSending={isSending} />
 
           {confirmation ? (
             <Animated.View
@@ -107,47 +182,28 @@ export default function SignalementsScreen() {
               </Text>
             </Animated.View>
           ) : null}
-
-          <View style={styles.sectionHeader}>
-            <Text
-              style={[
-                {
-                  color: colors.textPrimary,
-                  fontSize: getFontSize(typography.sizes.h4),
-                  fontFamily: typography.families.headingSemiBold,
-                },
-              ]}
-            >
-              {t('participation.signalements.recentTitle')}
-            </Text>
-            <PressableScale
-              onPress={() => {
-                /* TODO(backend) : liste complète paginée des signalements */
-              }}
-              scaleTo={motion.scale.chip}
-              accessibilityRole="link"
-              accessibilityLabel={t('participation.signalements.seeAll')}
-              style={styles.seeAll}
-            >
-              <Text
-                style={{
-                  color: colors.primary,
-                  fontSize: getFontSize(typography.sizes.caption),
-                  fontFamily: typography.families.bodyBold,
-                }}
-              >
-                {t('participation.signalements.seeAll')}
-              </Text>
-              <Ionicons name="chevron-forward" size={14} color={colors.primary} />
-            </PressableScale>
-          </View>
         </View>
       }
-      renderItem={({ item, index }) => (
-        <Animated.View entering={enterListItem(index)} style={styles.cardSlot}>
-          <SignalementCard item={item} />
-        </Animated.View>
-      )}
+      renderItem={({ item: ligne, index }) =>
+        ligne.type === 'entete' ? (
+          <Text
+            style={[
+              styles.sectionTitle,
+              {
+                color: colors.textPrimary,
+                fontSize: getFontSize(typography.sizes.h4),
+                fontFamily: typography.families.headingSemiBold,
+              },
+            ]}
+          >
+            {ligne.titre}
+          </Text>
+        ) : (
+          <Animated.View entering={enterListItem(Math.min(index, 6))} style={styles.cardSlot}>
+            <SignalementCard item={versCarte(ligne.item)} />
+          </Animated.View>
+        )
+      }
       ListEmptyComponent={
         <View style={styles.empty}>
           <Ionicons name="megaphone-outline" size={44} color={colors.textTertiary} />
@@ -181,18 +237,9 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.md,
     marginTop: spacing.md,
   },
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: spacing.xxl,
-    marginBottom: spacing.md,
-  },
-  seeAll: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 2,
-    paddingVertical: spacing.xs,
+  sectionTitle: {
+    marginTop: spacing.xl,
+    marginBottom: spacing.xs,
   },
   cardSlot: {
     marginBottom: spacing.md,

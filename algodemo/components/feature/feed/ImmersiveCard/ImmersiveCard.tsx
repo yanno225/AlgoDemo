@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { StyleSheet, View, Text, Share } from 'react-native';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -16,10 +16,17 @@ import Animated, {
   Extrapolation,
 } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
+import { VideoView, useVideoPlayer } from 'expo-video';
 import * as Speech from 'expo-speech';
+import { dire } from '../../../../services/voix';
 import * as Haptics from 'expo-haptics';
 import { useTranslation } from 'react-i18next';
 import { useAccessibility } from '../../../../hooks/useAccessibility';
+import { CommentsSheet } from '../CommentsSheet';
+import {
+  markAsRead,
+  toggleLike as toggleLikeApi,
+} from '../../../../services/api/feed';
 import { THEMATICS } from '../../../../constants/thematics';
 import { VERIFICATION_LEVELS } from '../../../../constants/verification';
 import {
@@ -49,6 +56,8 @@ export interface FeedItem {
   isOfficial?: boolean;
   date: string;
   imageUrl?: string;
+  /** Contenu de type VIDEO : l'URL du fichier (MinIO). Prime sur l'image. */
+  videoUrl?: string;
   likesCount?: number;
   commentsCount?: number;
 }
@@ -66,6 +75,8 @@ export interface ImmersiveCardProps {
   bottomInset: number;
   /** Marge haute réservée à l'en-tête flottant. */
   topInset: number;
+  /** Vrai si l'utilisateur a déjà aimé ce contenu (état serveur). */
+  initiallyLiked?: boolean;
 }
 
 const getThematicEmoji = (id: string): string => {
@@ -100,14 +111,70 @@ export const ImmersiveCard: React.FC<ImmersiveCardProps> = ({
   isActive,
   bottomInset,
   topInset,
+  initiallyLiked = false,
 }) => {
   const { colors, getFontSize } = useAccessibility();
   const { t } = useTranslation();
 
   const [isSpeaking, setIsSpeaking] = useState(false);
-  const [isLiked, setIsLiked] = useState(false);
+  const [isLiked, setIsLiked] = useState(initiallyLiked);
   const [likes, setLikes] = useState(item.likesCount ?? 0);
   const [isSaved, setIsSaved] = useState(false);
+  const [showComments, setShowComments] = useState(false);
+  const [commentsCount, setCommentsCount] = useState(item.commentsCount ?? 0);
+  // Une seule requête « j'aime » à la fois : la bascule serveur rendrait
+  // deux appuis rapprochés incohérents avec l'état affiché.
+  const likeEnCours = useRef(false);
+
+  // L'état serveur peut arriver après le premier rendu (chargement des
+  // réactions en parallèle du feed) : on se cale dessus quand il tombe.
+  useEffect(() => {
+    setIsLiked(initiallyLiked);
+  }, [initiallyLiked]);
+
+  // Historique de lecture (§6.1) : une carte regardée ~2 s compte comme lue.
+  useEffect(() => {
+    if (!isActive) return;
+    const timer = setTimeout(() => void markAsRead(item.id), 2000);
+    return () => clearTimeout(timer);
+  }, [isActive, item.id]);
+
+  // ─── Vidéo (contenus de type VIDEO) ────────────────────────────────
+  // Le lecteur est créé même sans vidéo (règle des hooks) mais reste inerte
+  // tant que la source est nulle. Comme sur les plateformes que les citoyens
+  // connaissent : la vidéo boucle, démarre quand la carte occupe l'écran,
+  // se met en pause dès qu'on en part.
+  const player = useVideoPlayer(item.videoUrl ?? null, (instance) => {
+    instance.loop = true;
+  });
+
+  // Pause volontaire : un tap sur la vidéo, comme partout ailleurs.
+  const [isPaused, setIsPaused] = useState(false);
+
+  useEffect(() => {
+    if (!item.videoUrl) return;
+    if (isActive && !isPaused) {
+      player.play();
+    } else {
+      player.pause();
+    }
+  }, [isActive, isPaused, item.videoUrl, player]);
+
+  // Quitter la carte remet la lecture : au retour, la vidéo repart seule.
+  useEffect(() => {
+    if (!isActive) setIsPaused(false);
+  }, [isActive]);
+
+  const togglePause = useCallback(() => {
+    if (!item.videoUrl) return;
+    void Haptics.selectionAsync();
+    setIsPaused((current) => !current);
+  }, [item.videoUrl]);
+
+  // La lecture vocale et la bande-son de la vidéo ne se superposent jamais.
+  useEffect(() => {
+    if (item.videoUrl) player.muted = isSpeaking;
+  }, [isSpeaking, item.videoUrl, player]);
 
   const burst = useSharedValue(0);
   const likeScale = useSharedValue(1);
@@ -187,21 +254,40 @@ export const ImmersiveCard: React.FC<ImmersiveCardProps> = ({
       return;
     }
     setIsSpeaking(true);
-    Speech.speak(`${item.title}. ${item.body}`, {
-      language: 'fr',
+    void dire(`${item.title}. ${item.body}`, {
       onDone: () => setIsSpeaking(false),
       onError: () => setIsSpeaking(false),
       onStopped: () => setIsSpeaking(false),
     });
   };
 
-  // ─── J'aime ────────────────────────────────────────────────────────
+  // ─── J'aime (persisté côté serveur) ────────────────────────────────
+  // L'affichage réagit immédiatement (optimiste) ; le serveur confirme dans
+  // la foulée, et un échec réseau remet l'état d'avant — jamais un cœur
+  // menteur.
   const applyLike = useCallback(
     (liked: boolean) => {
+      if (likeEnCours.current) return;
+      likeEnCours.current = true;
+
       setIsLiked(liked);
-      setLikes((current) => current + (liked ? 1 : -1));
+      setLikes((current) => Math.max(0, current + (liked ? 1 : -1)));
+
+      toggleLikeApi(item.id)
+        .then(({ aime, total }) => {
+          // Le serveur fait foi : total exact et état réel de la bascule.
+          setIsLiked(aime);
+          setLikes(total);
+        })
+        .catch(() => {
+          setIsLiked(!liked);
+          setLikes((current) => Math.max(0, current + (liked ? -1 : 1)));
+        })
+        .finally(() => {
+          likeEnCours.current = false;
+        });
     },
-    []
+    [item.id]
   );
 
   const toggleLike = () => {
@@ -231,6 +317,16 @@ export const ImmersiveCard: React.FC<ImmersiveCardProps> = ({
       scheduleOnRN(likeByDoubleTap);
     });
 
+  // Un tap simple met la vidéo en pause (ou la relance). `Exclusive` donne la
+  // priorité au double-tap : le tap simple n'agit que si le second n'arrive pas.
+  const singleTap = Gesture.Tap()
+    .numberOfTaps(1)
+    .onEnd(() => {
+      'worklet';
+      scheduleOnRN(togglePause);
+    });
+  const taps = Gesture.Exclusive(doubleTap, singleTap);
+
   const burstStyle = useAnimatedStyle(() => ({
     opacity: burst.value,
     transform: [
@@ -256,11 +352,19 @@ export const ImmersiveCard: React.FC<ImmersiveCardProps> = ({
 
   return (
     <View style={[styles.container, { height: itemHeight }]}>
-      <GestureDetector gesture={doubleTap}>
+      <GestureDetector gesture={taps}>
         <View style={StyleSheet.absoluteFill}>
           {/* ─── Média ─────────────────────────────────────────────── */}
           <Animated.View style={[StyleSheet.absoluteFill, mediaStyle]}>
-            {item.imageUrl ? (
+            {item.videoUrl ? (
+              <VideoView
+                player={player}
+                style={StyleSheet.absoluteFill}
+                contentFit="cover"
+                nativeControls={false}
+                accessibilityLabel={item.title}
+              />
+            ) : item.imageUrl ? (
               <Image
                 source={{ uri: item.imageUrl }}
                 placeholder={{ blurhash: BLURHASH }}
@@ -294,6 +398,15 @@ export const ImmersiveCard: React.FC<ImmersiveCardProps> = ({
           <Animated.View style={[styles.burst, burstStyle]} pointerEvents="none">
             <Ionicons name="heart" size={110} color={withAlpha('#FFFFFF', 0.92)} />
           </Animated.View>
+
+          {/* Indicateur de pause — visible tant que la vidéo est arrêtée. */}
+          {isPaused && item.videoUrl && (
+            <View style={styles.pauseOverlay} pointerEvents="none">
+              <View style={[styles.pauseBadge, { backgroundColor: withAlpha('#000000', 0.45) }]}>
+                <Ionicons name="play" size={34} color="#FFFFFF" style={{ marginLeft: 3 }} />
+              </View>
+            </View>
+          )}
         </View>
       </GestureDetector>
 
@@ -432,10 +545,8 @@ export const ImmersiveCard: React.FC<ImmersiveCardProps> = ({
           <RailAction
             icon="chatbubble-outline"
             tint="#FFFFFF"
-            label={String(item.commentsCount ?? 0)}
-            onPress={() => {
-              /* TODO(backend) : ouverture du fil de commentaires modérés */
-            }}
+            label={String(commentsCount)}
+            onPress={() => setShowComments(true)}
             accessibilityLabel={t('feed.actions.comment')}
           />
 
@@ -464,6 +575,13 @@ export const ImmersiveCard: React.FC<ImmersiveCardProps> = ({
           />
         </View>
       </Animated.View>
+
+      {/* ─── Fil de commentaires ─────────────────────────────────────── */}
+      <CommentsSheet
+        contenuId={showComments ? item.id : null}
+        onClose={() => setShowComments(false)}
+        onCommentPosted={() => setCommentsCount((current) => current + 1)}
+      />
     </View>
   );
 };
@@ -514,6 +632,18 @@ const styles = StyleSheet.create({
   },
   burst: {
     ...StyleSheet.absoluteFillObject,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  pauseOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  pauseBadge: {
+    width: 76,
+    height: 76,
+    borderRadius: borderRadius.full,
     justifyContent: 'center',
     alignItems: 'center',
   },

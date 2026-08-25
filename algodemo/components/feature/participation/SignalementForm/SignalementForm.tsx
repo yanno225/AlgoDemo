@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { StyleSheet, View, Text, ScrollView } from 'react-native';
+import { StyleSheet, View, Text, ScrollView, ActivityIndicator } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
+import * as Location from 'expo-location';
 import * as Haptics from 'expo-haptics';
 import Animated, {
   useAnimatedStyle,
@@ -50,14 +51,20 @@ const CATEGORY_ICONS: Record<SignalementCategoryKey, keyof typeof Ionicons.glyph
 const DESCRIPTION_MAX = 400;
 
 export interface SignalementDraft {
-  category: string;
+  /** Clé de catégorie (`road`, `lighting`…) — le libellé se retraduit partout. */
+  categoryKey: SignalementCategoryKey;
   description: string;
   location: string;
+  /** Position GPS exacte, si « utiliser ma position » a servi. */
+  latitude?: number;
+  longitude?: number;
   photoUri: string | null;
 }
 
 export interface SignalementFormProps {
   onSubmit: (draft: SignalementDraft) => void;
+  /** Envoi en cours (upload photo + dépôt) : le bouton se verrouille. */
+  isSending?: boolean;
 }
 
 /**
@@ -67,17 +74,59 @@ export interface SignalementFormProps {
  * une saisie libre rendait le tri impossible côté commune et produisait autant
  * d'intitulés que de signalements.
  */
-export const SignalementForm: React.FC<SignalementFormProps> = ({ onSubmit }) => {
+export const SignalementForm: React.FC<SignalementFormProps> = ({
+  onSubmit,
+  isSending = false,
+}) => {
   const { colors, getFontSize } = useAccessibility();
   const { t } = useTranslation();
 
   const [category, setCategory] = useState<SignalementCategoryKey | null>(null);
   const [description, setDescription] = useState('');
   const [location, setLocation] = useState('');
+  const [coords, setCoords] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [isLocating, setIsLocating] = useState(false);
   const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [error, setError] = useState('');
 
   const isComplete = !!category && description.trim().length > 0 && location.trim().length > 0;
+
+  /** Position réelle du téléphone → adresse lisible (géocodage inverse). */
+  const handleLocate = async () => {
+    if (isLocating) return;
+    setIsLocating(true);
+    setError('');
+    try {
+      const permission = await Location.requestForegroundPermissionsAsync();
+      if (!permission.granted) {
+        setError(t('participation.signalements.locationDenied'));
+        return;
+      }
+      const position = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Balanced,
+      });
+      const { latitude, longitude } = position.coords;
+      setCoords({ latitude, longitude });
+
+      // L'adresse lisible reste modifiable : le géocodage peut être approximatif.
+      const [adresse] = await Location.reverseGeocodeAsync({ latitude, longitude });
+      const lisible = [
+        [adresse?.streetNumber, adresse?.street].filter(Boolean).join(' '),
+        adresse?.district,
+        adresse?.city,
+      ]
+        .filter(Boolean)
+        .join(', ');
+      setLocation(
+        lisible || `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`
+      );
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch {
+      setError(t('participation.signalements.locationError'));
+    } finally {
+      setIsLocating(false);
+    }
+  };
 
   const handlePickPhoto = async () => {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -96,21 +145,23 @@ export const SignalementForm: React.FC<SignalementFormProps> = ({ onSubmit }) =>
   };
 
   const handleSubmit = () => {
-    if (!isComplete) {
+    if (!isComplete || !category) {
       setError(t('participation.signalements.missingFields'));
       return;
     }
     setError('');
     onSubmit({
-      category: t(`participation.signalements.categories.${category}`),
+      categoryKey: category,
       description: description.trim(),
       location: location.trim(),
+      ...(coords ?? {}),
       photoUri,
     });
 
     setCategory(null);
     setDescription('');
     setLocation('');
+    setCoords(null);
     setPhotoUri(null);
   };
 
@@ -187,16 +238,18 @@ export const SignalementForm: React.FC<SignalementFormProps> = ({ onSubmit }) =>
           style={styles.locationInput}
         />
         <PressableScale
-          onPress={() => {
-            // TODO(backend) : géolocalisation via expo-location puis géocodage inverse.
-            setLocation('24 Rue de la République');
-          }}
+          onPress={() => void handleLocate()}
           scaleTo={motion.scale.chip}
           accessibilityRole="button"
           accessibilityLabel={t('participation.signalements.useMyPosition')}
+          accessibilityState={{ busy: isLocating }}
           style={[styles.locationButton, { backgroundColor: withAlpha(colors.secondary, 0.14) }]}
         >
-          <Ionicons name="locate" size={19} color={colors.secondary} />
+          {isLocating ? (
+            <ActivityIndicator size="small" color={colors.secondary} />
+          ) : (
+            <Ionicons name="locate" size={19} color={colors.secondary} />
+          )}
         </PressableScale>
       </View>
 
@@ -288,8 +341,13 @@ export const SignalementForm: React.FC<SignalementFormProps> = ({ onSubmit }) =>
       ) : null}
 
       <Button
-        label={t('participation.signalements.submit')}
+        label={
+          isSending
+            ? t('participation.signalements.sending')
+            : t('participation.signalements.submit')
+        }
         onPress={handleSubmit}
+        disabled={isSending}
         icon="send"
         iconPosition="right"
         haptic="success"

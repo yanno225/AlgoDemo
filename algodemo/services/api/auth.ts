@@ -24,6 +24,8 @@ interface BackendUser {
   compteValide: boolean;
   estBloque: boolean;
   deuxFaActif: boolean;
+  consentementNotifications?: boolean;
+  creeLe?: string;
 }
 
 interface TokenPair {
@@ -31,8 +33,14 @@ interface TokenPair {
   refreshToken: string;
 }
 
-/** Réponse de login : jetons, ou demande de second facteur. */
-type LoginResponse = TokenPair | { deuxFaRequis: true };
+/**
+ * Réponse de login : jetons, demande de code TOTP (2FA activée), ou demande
+ * du code de connexion envoyé par email (§9.3 — à chaque connexion).
+ */
+type LoginResponse =
+  | TokenPair
+  | { deuxFaRequis: true }
+  | { otpRequis: true };
 
 const ROLE_MAP: Record<BackendRole, User['role']> = {
   UTILISATEUR: 'standard',
@@ -52,7 +60,66 @@ export function mapUser(backend: BackendUser): User {
     phone: backend.telephone ?? undefined,
     role: ROLE_MAP[backend.role],
     isActive: backend.compteValide && !backend.estBloque,
+    createdAt: backend.creeLe,
+    twoFaEnabled: backend.deuxFaActif,
+    notifConsent: backend.consentementNotifications,
   };
+}
+
+// ─── Sécurité du compte (2FA TOTP) ───────────────────────────────────
+
+/** Démarre l'activation : secret à saisir dans l'app d'authentification. */
+export async function enable2Fa(): Promise<{ secret: string; otpauthUrl: string }> {
+  const { data } = await apiClient.post<{ secret: string; otpauthUrl: string }>(
+    '/auth/2fa/enable'
+  );
+  return data;
+}
+
+/** Active définitivement la 2FA avec un premier code TOTP valide. */
+export async function confirm2Fa(code: string): Promise<void> {
+  await apiClient.post('/auth/2fa/confirm', { code });
+}
+
+/** Désactive la 2FA — exige un code TOTP valide. */
+export async function disable2Fa(code: string): Promise<void> {
+  await apiClient.post('/auth/2fa/disable', { code });
+}
+
+// ─── RGPD : consentement et anonymisation ────────────────────────────
+
+export async function updateConsent(consent: {
+  consentementNotifications?: boolean;
+  politiqueConfidentialiteAcceptee?: boolean;
+}): Promise<User> {
+  const { data } = await apiClient.patch<BackendUser>('/auth/consent', consent);
+  return mapUser(data);
+}
+
+/**
+ * Anonymisation irréversible (RG-USR-07) : le compte est anonymisé, toutes
+ * les contributions passées s'affichent « Citoyen », les sessions sont
+ * révoquées côté serveur.
+ */
+export async function anonymiser(): Promise<void> {
+  await apiClient.post('/auth/anonymisation');
+}
+
+// ─── Mes statistiques d'activité (compteurs réels du backend) ────────
+export interface MyStats {
+  avisDeposes: number;
+  avisApprouves: number;
+  votesConsultations: number;
+  votesDebats: number;
+  debatsRejoints: number;
+  prisesDeParole: number;
+  signalementsEmis: number;
+}
+
+/** Les compteurs affichés par le profil — comptés côté serveur, rien d'estimé. */
+export async function getMyStats(): Promise<MyStats> {
+  const { data } = await apiClient.get<MyStats>('/auth/users/moi/statistiques');
+  return data;
 }
 
 // ─── Requêtes ────────────────────────────────────────────────────────
@@ -117,6 +184,13 @@ export function isTokenPair(response: LoginResponse): response is TokenPair {
   return 'accessToken' in response;
 }
 
+/** Le serveur attend le code de connexion envoyé par email. */
+export function isOtpRequired(
+  response: LoginResponse
+): response is { otpRequis: true } {
+  return 'otpRequis' in response;
+}
+
 // ─── Relais d'inscription (mémoire vive uniquement) ──────────────────
 //
 // Après vérification de l'email, il faut le mot de passe pour obtenir les
@@ -134,4 +208,13 @@ export function consumePendingLogin(): { email: string; password: string } | nul
   const value = pendingCredentials;
   pendingCredentials = null;
   return value;
+}
+
+/**
+ * Lecture SANS consommation — parcours OTP de connexion : un code erroné
+ * autorise une nouvelle tentative, les identifiants doivent donc survivre
+ * jusqu'au succès (où `consumePendingLogin` les efface).
+ */
+export function peekPendingLogin(): { email: string; password: string } | null {
+  return pendingCredentials;
 }

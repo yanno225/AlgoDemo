@@ -11,6 +11,12 @@ export interface User {
   role: 'standard' | 'point_focal' | 'admin_labo';
   isActive: boolean;
   avatarUri?: string;
+  /** Date de création du compte (ISO) — sert au « membre depuis AAAA ». */
+  createdAt?: string;
+  /** Second facteur TOTP actif sur le compte. */
+  twoFaEnabled?: boolean;
+  /** Consentement RGPD aux notifications. */
+  notifConsent?: boolean;
 }
 
 interface AuthState {

@@ -1,5 +1,10 @@
+// EN PREMIER : intercepte le faux positif d'expo-notifications dans Expo Go
+// avant même que le module ne se charge (voir le fichier pour le pourquoi).
+import '../services/console-filtre';
 import React, { useEffect } from 'react';
-import { Stack } from 'expo-router';
+import { LogBox } from 'react-native';
+import { Stack, router } from 'expo-router';
+import * as Notifications from 'expo-notifications';
 import { useFonts, Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold } from '@expo-google-fonts/inter';
 import { PlusJakartaSans_600SemiBold, PlusJakartaSans_700Bold } from '@expo-google-fonts/plus-jakarta-sans';
 import * as SplashScreen from 'expo-splash-screen';
@@ -11,11 +16,25 @@ import { StatusBar } from 'expo-status-bar';
 import { useAuthStore } from '../stores/authStore';
 import { useOnboardingStore } from '../stores/onboardingStore';
 import { useAccessibility } from '../hooks/useAccessibility';
+import { installerAffichageNotifications } from '../services/rappels';
 import { lightColors, darkColors } from '../constants/theme';
 import '../i18n/config';
 
 // Garde le splash screen visible pendant le chargement des ressources
 SplashScreen.preventAutoHideAsync();
+
+// Expo Go (SDK 53+) ne fait plus de push DISTANT : à l'import,
+// expo-notifications le signale en tentant d'auto-enregistrer un token push.
+// Nos rappels de débats sont des notifications LOCALES — elles fonctionnent.
+// Le push distant (FCM) arrivera avec le build de développement ; d'ici là,
+// ce log est du bruit connu, sans effet, qu'on retire de l'écran.
+LogBox.ignoreLogs([
+  /expo-notifications.*Expo Go/,
+  /`expo-notifications` functionality is not fully supported in Expo Go/,
+]);
+
+// Les rappels de débats s'affichent en bannière sonore même app ouverte.
+installerAffichageNotifications();
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -46,6 +65,22 @@ export default function RootLayout() {
     // l'index a besoin des deux pour décider de la première route.
     loadSession();
     loadOnboarding();
+  }, []);
+
+  useEffect(() => {
+    // Toucher un rappel de débat mène à l'onglet Débats : s'il est en direct,
+    // sa carte y est en tête ; l'écran se recharge à chaque focus.
+    const abonnement = Notifications.addNotificationResponseReceivedListener(
+      (reponse) => {
+        const donnees = reponse.notification.request.content.data as
+          | { type?: string }
+          | undefined;
+        if (donnees?.type === 'rappel-debat') {
+          router.push('/(tabs)/debats');
+        }
+      }
+    );
+    return () => abonnement.remove();
   }, []);
 
   useEffect(() => {

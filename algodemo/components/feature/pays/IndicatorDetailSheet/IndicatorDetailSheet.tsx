@@ -3,6 +3,7 @@ import { StyleSheet, View, Text, Modal, Pressable, ScrollView } from 'react-nati
 import { Ionicons } from '@expo/vector-icons';
 import Svg, { Polyline, Circle, Line } from 'react-native-svg';
 import * as Speech from 'expo-speech';
+import { dire } from '../../../../services/voix';
 import * as Haptics from 'expo-haptics';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { useAccessibility } from '../../../../hooks/useAccessibility';
@@ -83,9 +84,9 @@ export const IndicatorDetailSheet: React.FC<IndicatorDetailSheetProps> = ({
       delta === null
         ? ''
         : ` Tendance : ${delta >= 0 ? 'en hausse' : 'en baisse'} de ${Math.abs(delta)} points.`;
-    Speech.speak(
+    void dire(
       `${indicator.labelKey}. ${value}${indicator.unit}. ${indicator.description}${trend}`,
-      { language: 'fr', onDone: () => setIsSpeaking(false), onStopped: () => setIsSpeaking(false) }
+      { onDone: () => setIsSpeaking(false), onStopped: () => setIsSpeaking(false) }
     );
   };
 

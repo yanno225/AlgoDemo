@@ -4,6 +4,7 @@ import {
   View,
   Text,
   ScrollView,
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
@@ -17,6 +18,8 @@ import { Button } from '../../components/ui/Button';
 import { PressableScale } from '../../components/ui/PressableScale';
 import { AuthHeader } from '../../components/feature/auth/AuthHeader';
 import { OtpInput } from '../../components/feature/auth/OtpInput';
+import { OtpSuccess } from '../../components/feature/auth/OtpSuccess';
+import { VerifyingDots } from '../../components/feature/auth/VerifyingDots';
 import { enterSection, enterFade } from '../../components/ui/motion';
 import { useAuthStore } from '../../stores/authStore';
 import * as authService from '../../services/api/auth';
@@ -34,9 +37,13 @@ export default function OtpScreen() {
   const { setSession, setTokens } = useAuthStore();
 
   const destination = (params.destination as string) || '';
+  /** `connexion` = confirmation de connexion ; sinon vérification d'email. */
+  const modeConnexion = params.mode === 'connexion';
 
   const [code, setCode] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isResending, setIsResending] = useState(false);
+  const [isVerified, setIsVerified] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [secondsLeft, setSecondsLeft] = useState(RESEND_DELAY_SECONDS);
@@ -47,6 +54,37 @@ export default function OtpScreen() {
     const timer = setInterval(() => setSecondsLeft((s) => Math.max(0, s - 1)), 1000);
     return () => clearInterval(timer);
   }, [secondsLeft]);
+
+  // Après la secousse d'erreur, les cases se vident d'elles-mêmes : on
+  // retape sans avoir à effacer, comme dans les saisies de code réussies.
+  useEffect(() => {
+    if (!error || code.length < OTP_LENGTH) return;
+    const timer = setTimeout(() => setCode(''), 620);
+    return () => clearTimeout(timer);
+  }, [error, code]);
+
+  /**
+   * Jetons obtenus → confirmation animée → session posée → feed.
+   * La navigation attend la fin de l'animation : la coche verte est le
+   * « c'est bien vous » que l'utilisateur doit avoir le temps de voir.
+   */
+  const ouvrirSession = useCallback(
+    async (tokens: { accessToken: string; refreshToken: string }) => {
+      Keyboard.dismiss();
+      setIsVerified(true);
+      const [, user] = await Promise.all([
+        // Durée minimale d'affichage de la confirmation.
+        new Promise((resolve) => setTimeout(resolve, 1400)),
+        (async () => {
+          await setTokens(tokens.accessToken, tokens.refreshToken);
+          return authService.fetchMe();
+        })(),
+      ]);
+      await setSession(user, tokens.accessToken, tokens.refreshToken);
+      router.replace('/feed');
+    },
+    [router, setSession, setTokens]
+  );
 
   const handleVerify = useCallback(
     async (submitted?: string) => {
@@ -62,18 +100,46 @@ export default function OtpScreen() {
       setIsLoading(true);
 
       try {
-        // 1. Vérifier l'email avec le code reçu.
+        if (modeConnexion) {
+          // Confirmation de connexion : le code accompagne les identifiants
+          // gardés en mémoire vive. Un code faux autorise un nouvel essai —
+          // ils ne sont consommés qu'au succès.
+          const pending = authService.peekPendingLogin();
+          if (!pending || pending.email !== destination) {
+            router.replace('/login');
+            return;
+          }
+          const result = await authService.login(
+            pending.email,
+            pending.password,
+            value
+          );
+          if (authService.isTokenPair(result)) {
+            authService.consumePendingLogin();
+            await ouvrirSession(result);
+          }
+          return;
+        }
+
+        // 1. Vérifier l'email avec le code reçu (inscription).
         await authService.verifyEmail(destination, value);
 
-        // 2. Connexion automatique avec les identifiants gardés en mémoire.
-        const pending = authService.consumePendingLogin();
+        // 2. Connexion automatique — le serveur exige désormais son code de
+        //    connexion : on reste sur cet écran, en mode connexion implicite.
+        const pending = authService.peekPendingLogin();
         if (pending && pending.email === destination) {
           const result = await authService.login(pending.email, pending.password);
           if (authService.isTokenPair(result)) {
-            await setTokens(result.accessToken, result.refreshToken);
-            const user = await authService.fetchMe();
-            await setSession(user, result.accessToken, result.refreshToken);
-            router.replace('/feed');
+            authService.consumePendingLogin();
+            await ouvrirSession(result);
+            return;
+          }
+          if (authService.isOtpRequired(result)) {
+            // Un nouveau code (de connexion) vient d'être envoyé.
+            setCode('');
+            setSecondsLeft(RESEND_DELAY_SECONDS);
+            setNotice(t('auth.otp.resent'));
+            router.setParams({ mode: 'connexion' });
             return;
           }
         }
@@ -87,18 +153,31 @@ export default function OtpScreen() {
         setIsLoading(false);
       }
     },
-    [code, destination, router, setSession, setTokens, t]
+    [code, destination, modeConnexion, ouvrirSession, router, t]
   );
 
   const handleResend = async () => {
     setError('');
+    setIsResending(true);
     try {
-      await authService.resendOtp(destination);
+      if (modeConnexion) {
+        // Redemander un code de connexion = refaire l'appel sans code.
+        const pending = authService.peekPendingLogin();
+        if (!pending) {
+          router.replace('/login');
+          return;
+        }
+        await authService.login(pending.email, pending.password);
+      } else {
+        await authService.resendOtp(destination);
+      }
       setSecondsLeft(RESEND_DELAY_SECONDS);
       setCode('');
       setNotice(t('auth.otp.resent'));
     } catch (err) {
       setError(toApiError(err).message);
+    } finally {
+      setIsResending(false);
     }
   };
 
@@ -113,9 +192,18 @@ export default function OtpScreen() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          <AuthHeader subtitle={t('auth.otp.title')} onBack={() => router.back()} />
+          <AuthHeader
+            subtitle={modeConnexion ? t('auth.otp.loginTitle') : t('auth.otp.title')}
+            onBack={() => router.back()}
+          />
 
           <Animated.View entering={enterSection(120)} style={styles.form}>
+            {isVerified ? (
+              /* Code accepté : le formulaire cède la place à la coche verte
+                 pendant que la session s'ouvre en coulisses. */
+              <OtpSuccess label={t('auth.otp.verified')} />
+            ) : (
+            <>
             <View style={styles.destinationBlock}>
               <Text
                 style={{
@@ -124,7 +212,7 @@ export default function OtpScreen() {
                   fontFamily: typography.families.body,
                 }}
               >
-                {t('auth.otp.subtitle')}
+                {modeConnexion ? t('auth.otp.loginSubtitle') : t('auth.otp.subtitle')}
               </Text>
               <View
                 style={[
@@ -188,7 +276,7 @@ export default function OtpScreen() {
               >
                 {error}
               </Animated.Text>
-            ) : notice ? (
+            ) : notice && !isLoading && !isResending ? (
               <Animated.Text
                 entering={enterFade()}
                 accessibilityLiveRegion="polite"
@@ -205,15 +293,30 @@ export default function OtpScreen() {
               </Animated.Text>
             ) : null}
 
-            <Button
-              label={t('auth.otp.submit')}
-              onPress={() => handleVerify()}
-              loading={isLoading}
-              disabled={code.length < OTP_LENGTH}
-              size="lg"
-              haptic="medium"
-              style={styles.submit}
-            />
+            {/* Pendant que le serveur travaille, le bouton s'efface au profit
+                des cinq points FID qui dansent — l'attente raconte la marque. */}
+            {isLoading || isResending ? (
+              <Animated.View entering={enterFade()} style={styles.submit}>
+                <VerifyingDots
+                  label={
+                    isVerified
+                      ? t('auth.otp.verified')
+                      : isResending
+                        ? t('auth.otp.sending')
+                        : t('auth.otp.verifying')
+                  }
+                />
+              </Animated.View>
+            ) : (
+              <Button
+                label={t('auth.otp.submit')}
+                onPress={() => handleVerify()}
+                disabled={code.length < OTP_LENGTH}
+                size="lg"
+                haptic="medium"
+                style={styles.submit}
+              />
+            )}
 
             <PressableScale
               onPress={handleResend}
@@ -235,6 +338,8 @@ export default function OtpScreen() {
                   : t('auth.otp.resend')}
               </Text>
             </PressableScale>
+            </>
+            )}
           </Animated.View>
         </ScrollView>
       </KeyboardAvoidingView>

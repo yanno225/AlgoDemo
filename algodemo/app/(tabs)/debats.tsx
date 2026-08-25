@@ -1,6 +1,15 @@
-import React from 'react';
-import { StyleSheet, View, Text, ScrollView } from 'react-native';
-import { useRouter } from 'expo-router';
+import React, { useCallback, useState } from 'react';
+import {
+  StyleSheet,
+  View,
+  Text,
+  ScrollView,
+  ActivityIndicator,
+  RefreshControl,
+  Linking,
+  Alert,
+} from 'react-native';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -15,6 +24,14 @@ import { BrandLogo } from '../../components/ui/BrandLogo';
 import { SectionHeader } from '../../components/ui/SectionHeader';
 import { LiveDot } from '../../components/ui/LiveDot';
 import { enterListItem, enterSection } from '../../components/ui/motion';
+import { listDebates, type Debate } from '../../services/api/debats';
+import {
+  annulerRappel,
+  listerRappels,
+  preparerRappels,
+  programmerRappel,
+} from '../../services/rappels';
+import { THEMATICS } from '../../constants/thematics';
 import {
   spacing,
   typography,
@@ -23,41 +40,29 @@ import {
   motion,
   scrimGradient,
   scrimLocations,
-  withAlpha,
+  thematicGradients,
 } from '../../constants/theme';
 
 const BLURHASH = 'L6Pj0^jE.AyE_3t7t7R**0o#DgR4';
 
-// TODO(backend) : remplacer par GET /debats (direct, replays, programmation).
-const FEATURED = {
-  title: "Régulation de l'IA : souveraineté ou innovation ?",
-  speakers: 'Dr. Sarah L. & Marc V.',
-  viewers: 1200,
-  cover: 'https://images.unsplash.com/photo-1591115765373-5207764f72e7?q=80&w=1000',
+/** Dégradé de repli d'un débat sans couverture — celui de sa thématique. */
+const gradientFor = (debate: Debate) => {
+  const token =
+    THEMATICS.find((thematic) => thematic.id === debate.thematicId)?.colorToken ??
+    'politique';
+  return thematicGradients[token];
 };
 
-const REPLAYS = [
-  {
-    id: 'replay_1',
-    title: 'Transition écologique : le rôle du nucléaire',
-    summary:
-      "Le débat a mis en évidence un consensus sur la nécessité d'un mix énergétique, tout en soulignant les divergences sur le stockage des déchets.",
-    date: 'Hier, 18:30',
-    tags: ['Énergie', 'Futur'],
-  },
-  {
-    id: 'replay_2',
-    title: 'Accès aux soins en zone rurale',
-    summary:
-      'Les participants ont proposé trois leviers majeurs : la télémédecine assistée, les maisons de santé pluridisciplinaires et la revalorisation des carrières.',
-    date: '24 Oct.',
-    tags: ['Santé', 'Territoires'],
-  },
-];
-
-const UPCOMING = {
-  title: 'Le travail en 2050 : la fin du salariat ?',
-  date: '12 Août · 18 h 00',
+/** « 16 août · 18:30 » — le format court des cartes. */
+const formatDateHeure = (iso: string) => {
+  const date = new Date(iso);
+  return `${date.toLocaleDateString('fr-FR', {
+    day: 'numeric',
+    month: 'long',
+  })} · ${date.toLocaleTimeString('fr-FR', {
+    hour: '2-digit',
+    minute: '2-digit',
+  })}`;
 };
 
 export default function DebatesScreen() {
@@ -66,10 +71,79 @@ export default function DebatesScreen() {
   const { colors, getFontSize } = useAccessibility();
   const insets = useSafeAreaInsets();
 
-  const formattedViewers =
-    FEATURED.viewers >= 1000
-      ? `${(FEATURED.viewers / 1000).toFixed(1).replace('.', ',')} k`
-      : String(FEATURED.viewers);
+  const [debates, setDebates] = useState<Debate[] | null>(null);
+  const [hasError, setHasError] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  /** Rappels programmés : debatId → identifiant de notification locale. */
+  const [reminders, setReminders] = useState<Record<string, string>>({});
+
+  const charger = useCallback(async () => {
+    // Les notifications programmées sont la source de vérité des rappels :
+    // rien à stocker nous-mêmes, donc rien à désynchroniser.
+    listerRappels().then(setReminders).catch(() => {});
+    try {
+      setDebates(await listDebates());
+      setHasError(false);
+    } catch {
+      setHasError(true);
+    }
+  }, []);
+
+  const basculerRappel = useCallback(
+    async (debate: Debate) => {
+      const existant = reminders[debate.id];
+      if (existant) {
+        await annulerRappel(existant);
+        setReminders((current) => {
+          const { [debate.id]: _retire, ...reste } = current;
+          return reste;
+        });
+        return;
+      }
+
+      const autorise = await preparerRappels();
+      if (!autorise) {
+        Alert.alert(t('debats.remindMe'), t('debats.notifDenied'));
+        return;
+      }
+
+      const notificationId = await programmerRappel({
+        id: debate.id,
+        title: debate.title,
+        startsAt: debate.startsAt,
+        reminderTitle: t('debats.reminderTitle'),
+        reminderBody: t('debats.reminderBody', { title: debate.title }),
+      });
+      if (notificationId) {
+        setReminders((current) => ({ ...current, [debate.id]: notificationId }));
+      }
+    },
+    [reminders, t]
+  );
+
+  // Rechargé à chaque retour sur l'onglet : un direct démarré par l'admin
+  // pendant qu'on était ailleurs apparaît dès qu'on revient.
+  useFocusEffect(
+    useCallback(() => {
+      void charger();
+    }, [charger])
+  );
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await charger();
+    setRefreshing(false);
+  }, [charger]);
+
+  const isLoading = debates === null && !hasError;
+
+  // Plusieurs directs simultanés sont un cas nominal : tous affichés, dans le
+  // même style — c'est la couverture choisie par l'admin qui les distingue.
+  const lives = debates?.filter((debate) => debate.status === 'live') ?? [];
+  const upcoming = (debates?.filter((debate) => debate.status === 'upcoming') ?? [])
+    .slice()
+    .sort((a, b) => a.startsAt.localeCompare(b.startsAt));
+  const ended = debates?.filter((debate) => debate.status === 'ended') ?? [];
 
   return (
     <Screen>
@@ -79,6 +153,14 @@ export default function DebatesScreen() {
           styles.content,
           { paddingBottom: TAB_BAR_CLEARANCE + insets.bottom },
         ]}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => void onRefresh()}
+            tintColor={colors.primary}
+            colors={[colors.primary]}
+          />
+        }
       >
         {/* ─── En-tête ─────────────────────────────────────────────── */}
         <Animated.View entering={enterSection(0)} style={styles.header}>
@@ -119,143 +201,339 @@ export default function DebatesScreen() {
           </Text>
         </Animated.View>
 
-        {/* ─── Direct en vedette ───────────────────────────────────── */}
+        {/* ─── En direct ───────────────────────────────────────────── */}
         <Animated.View entering={enterListItem(1)}>
-          <SectionHeader title={t('debats.featured')} style={styles.sectionHeader} />
-
-          <PressableScale
-            onPress={() => router.push('/live-room')}
-            scaleTo={motion.scale.card}
-            haptic="medium"
-            accessibilityRole="button"
-            accessibilityLabel={`${FEATURED.title}. ${t('debats.live')}`}
-            style={[styles.featuredCard, shadows.lg, { shadowColor: colors.primary }]}
-          >
-            <Image
-              source={{ uri: FEATURED.cover }}
-              placeholder={{ blurhash: BLURHASH }}
-              contentFit="cover"
-              transition={240}
-              style={StyleSheet.absoluteFill}
-            />
-            <LinearGradient
-              colors={scrimGradient}
-              locations={scrimLocations}
-              style={StyleSheet.absoluteFill}
-            />
-
-            <View style={styles.featuredTop}>
-              <LiveDot label={t('debats.live')} variant="overlay" />
-              <View style={[styles.criticalBadge, { backgroundColor: colors.secondary }]}>
-                <Text
-                  style={{
-                    color: colors.textPrimary,
-                    fontSize: getFontSize(typography.sizes.micro),
-                    fontFamily: typography.families.bodyBold,
-                  }}
-                >
-                  {t('debats.critical').toUpperCase()}
-                </Text>
-              </View>
-            </View>
-
-            <View style={styles.featuredBottom}>
-              <Text
-                numberOfLines={3}
-                style={[
-                  styles.featuredTitle,
-                  {
-                    fontSize: getFontSize(typography.sizes.h3),
-                    fontFamily: typography.families.heading,
-                  },
-                ]}
-              >
-                {FEATURED.title}
-              </Text>
-
-              <View style={styles.featuredMeta}>
-                <View style={styles.speakerBlock}>
-                  <Text
-                    style={[
-                      styles.metaLabel,
-                      {
-                        fontSize: getFontSize(typography.sizes.micro),
-                        fontFamily: typography.families.bodyMedium,
-                      },
-                    ]}
-                  >
-                    {t('debats.speakers')}
-                  </Text>
-                  <Text
-                    numberOfLines={1}
-                    style={[
-                      styles.metaValue,
-                      {
-                        fontSize: getFontSize(typography.sizes.caption),
-                        fontFamily: typography.families.bodySemiBold,
-                      },
-                    ]}
-                  >
-                    {FEATURED.speakers}
-                  </Text>
-                </View>
-
-                <View style={[styles.viewersChip, { backgroundColor: withAlpha('#000000', 0.4) }]}>
-                  <Ionicons name="eye-outline" size={13} color="#FFFFFF" />
-                  <Text
-                    style={[
-                      styles.metaValue,
-                      {
-                        fontSize: getFontSize(typography.sizes.micro),
-                        fontFamily: typography.families.bodySemiBold,
-                      },
-                    ]}
-                  >
-                    {t('debats.viewers', { value: formattedViewers })}
-                  </Text>
-                </View>
-              </View>
-            </View>
-          </PressableScale>
-
-          <Button
-            label={t('debats.join')}
-            onPress={() => router.push('/live-room')}
-            icon="play-circle"
-            haptic="medium"
-            size="lg"
-            style={styles.joinButton}
+          <SectionHeader
+            title={t('debats.liveSection')}
+            style={styles.sectionHeader}
           />
         </Animated.View>
 
-        {/* ─── Replays et résumés ──────────────────────────────────── */}
-        <Animated.View entering={enterListItem(2)}>
-          <SectionHeader title={t('debats.historyTitle')} style={styles.sectionHeader} />
-        </Animated.View>
+        {isLoading && (
+          <View style={styles.loadingBlock}>
+            <ActivityIndicator size="small" color={colors.primary} />
+          </View>
+        )}
 
-        {REPLAYS.map((replay, index) => (
-          <Animated.View key={replay.id} entering={enterListItem(3 + index)}>
-            <View
+        {hasError && !refreshing && (
+          <View style={[styles.emptyCard, { backgroundColor: colors.surface }, shadows.sm]}>
+            <Ionicons name="cloud-offline-outline" size={22} color={colors.textTertiary} />
+            <Text
               style={[
-                styles.replayCard,
-                { backgroundColor: colors.secondaryPale },
-                shadows.sm,
+                styles.emptyText,
+                {
+                  color: colors.textSecondary,
+                  fontSize: getFontSize(typography.sizes.bodySmall),
+                  fontFamily: typography.families.body,
+                },
               ]}
             >
-              <View style={styles.replayHeader}>
-                <View style={styles.replayLabelRow}>
-                  <MaterialCommunityIcons name="creation" size={15} color={colors.secondary} />
+              {t('debats.loadError')}
+            </Text>
+            <Button
+              label={t('debats.retry')}
+              onPress={() => void charger()}
+              variant="outline"
+              size="sm"
+              haptic="light"
+            />
+          </View>
+        )}
+
+        {!isLoading && !hasError && lives.length === 0 && (
+          <View style={[styles.emptyCard, { backgroundColor: colors.surface }, shadows.sm]}>
+            <Ionicons name="radio-outline" size={22} color={colors.textTertiary} />
+            <Text
+              style={[
+                styles.emptyText,
+                {
+                  color: colors.textSecondary,
+                  fontSize: getFontSize(typography.sizes.bodySmall),
+                  fontFamily: typography.families.body,
+                },
+              ]}
+            >
+              {t('debats.noLive')}
+            </Text>
+          </View>
+        )}
+
+        {lives.map((live, index) => (
+          <Animated.View
+            key={live.id}
+            entering={enterListItem(2 + index)}
+            style={styles.liveBlock}
+          >
+            <PressableScale
+              onPress={() =>
+                router.push({ pathname: '/live-room', params: { id: live.id } })
+              }
+              scaleTo={motion.scale.card}
+              haptic="medium"
+              accessibilityRole="button"
+              accessibilityLabel={`${live.title}. ${t('debats.live')}`}
+              style={[styles.featuredCard, shadows.lg, { shadowColor: colors.primary }]}
+            >
+              {/* La couverture choisie par l'admin distingue ce live des
+                  autres ; sans image, le dégradé de la thématique prend le
+                  relais (jamais de bloc gris). */}
+              {live.coverUrl ? (
+                <Image
+                  source={{ uri: live.coverUrl }}
+                  placeholder={{ blurhash: BLURHASH }}
+                  contentFit="cover"
+                  transition={240}
+                  style={StyleSheet.absoluteFill}
+                />
+              ) : (
+                <LinearGradient
+                  colors={gradientFor(live)}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={StyleSheet.absoluteFill}
+                />
+              )}
+              <LinearGradient
+                colors={scrimGradient}
+                locations={scrimLocations}
+                style={StyleSheet.absoluteFill}
+              />
+
+              <View style={styles.featuredTop}>
+                <LiveDot label={t('debats.live')} variant="overlay" />
+                {live.thematicLabel && (
+                  <View style={[styles.criticalBadge, { backgroundColor: colors.secondary }]}>
+                    <Text
+                      style={{
+                        color: colors.textPrimary,
+                        fontSize: getFontSize(typography.sizes.micro),
+                        fontFamily: typography.families.bodyBold,
+                      }}
+                    >
+                      {live.thematicLabel.toUpperCase()}
+                    </Text>
+                  </View>
+                )}
+              </View>
+
+              <View style={styles.featuredBottom}>
+                <Text
+                  numberOfLines={3}
+                  style={[
+                    styles.featuredTitle,
+                    {
+                      fontSize: getFontSize(typography.sizes.h3),
+                      fontFamily: typography.families.heading,
+                    },
+                  ]}
+                >
+                  {live.title}
+                </Text>
+
+                {live.description ? (
                   <Text
-                    style={{
-                      color: colors.secondary,
-                      fontSize: getFontSize(typography.sizes.micro),
-                      fontFamily: typography.families.bodyBold,
-                      letterSpacing: 0.6,
-                    }}
+                    numberOfLines={2}
+                    style={[
+                      styles.featuredDescription,
+                      {
+                        fontSize: getFontSize(typography.sizes.caption),
+                        fontFamily: typography.families.body,
+                      },
+                    ]}
                   >
-                    {t('debats.aiSummary').toUpperCase()}
+                    {live.description}
                   </Text>
+                ) : null}
+              </View>
+            </PressableScale>
+
+            <Button
+              label={t('debats.join')}
+              onPress={() =>
+                router.push({ pathname: '/live-room', params: { id: live.id } })
+              }
+              icon="play-circle"
+              haptic="medium"
+              size="lg"
+              style={styles.joinButton}
+            />
+          </Animated.View>
+        ))}
+
+        {/* ─── Historique ──────────────────────────────────────────── */}
+        {ended.length > 0 && (
+          <>
+            <Animated.View entering={enterListItem(3)}>
+              <SectionHeader
+                title={t('debats.historyTitle')}
+                style={[styles.sectionHeader, styles.sectionSpacing]}
+              />
+            </Animated.View>
+
+            {ended.map((debate, index) => (
+              <Animated.View key={debate.id} entering={enterListItem(4 + index)}>
+                <View
+                  style={[
+                    styles.replayCard,
+                    { backgroundColor: colors.secondaryPale },
+                    shadows.sm,
+                  ]}
+                >
+                  <View style={styles.replayHeader}>
+                    <View style={styles.replayLabelRow}>
+                      <MaterialCommunityIcons
+                        name="flag-checkered"
+                        size={15}
+                        color={colors.secondary}
+                      />
+                      <Text
+                        style={{
+                          color: colors.secondary,
+                          fontSize: getFontSize(typography.sizes.micro),
+                          fontFamily: typography.families.bodyBold,
+                          letterSpacing: 0.6,
+                        }}
+                      >
+                        {t('debats.ended').toUpperCase()}
+                      </Text>
+                    </View>
+                    <Text
+                      style={{
+                        color: colors.textTertiary,
+                        fontSize: getFontSize(typography.sizes.micro),
+                        fontFamily: typography.families.body,
+                      }}
+                    >
+                      {formatDateHeure(debate.startsAt)}
+                    </Text>
+                  </View>
+
+                  <Text
+                    style={[
+                      styles.replayTitle,
+                      {
+                        color: colors.textPrimary,
+                        fontSize: getFontSize(typography.sizes.body),
+                        fontFamily: typography.families.headingSemiBold,
+                      },
+                    ]}
+                  >
+                    {debate.title}
+                  </Text>
+
+                  {debate.description ? (
+                    <Text
+                      numberOfLines={3}
+                      style={[
+                        styles.replaySummary,
+                        {
+                          color: colors.textSecondary,
+                          fontSize: getFontSize(typography.sizes.bodySmall),
+                          fontFamily: typography.families.body,
+                        },
+                      ]}
+                    >
+                      {debate.description}
+                    </Text>
+                  ) : (
+                    <View style={styles.replaySpacer} />
+                  )}
+
+                  <View style={styles.replayFooter}>
+                    <View style={styles.tags}>
+                      {debate.thematicLabel && (
+                        <View style={[styles.tag, { backgroundColor: colors.surface }]}>
+                          <Text
+                            style={{
+                              color: colors.primary,
+                              fontSize: getFontSize(typography.sizes.micro),
+                              fontFamily: typography.families.bodyMedium,
+                            }}
+                          >
+                            {debate.thematicLabel}
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+
+                    {debate.replayUrl && (
+                      <PressableScale
+                        onPress={() => void Linking.openURL(debate.replayUrl!)}
+                        scaleTo={motion.scale.chip}
+                        accessibilityRole="button"
+                        accessibilityLabel={`${t('debats.listen')} — ${debate.title}`}
+                        style={styles.listenButton}
+                      >
+                        <Ionicons name="play-circle" size={19} color={colors.secondary} />
+                        <Text
+                          style={{
+                            color: colors.secondary,
+                            fontSize: getFontSize(typography.sizes.caption),
+                            fontFamily: typography.families.bodyBold,
+                          }}
+                        >
+                          {t('debats.listen')}
+                        </Text>
+                      </PressableScale>
+                    )}
+                  </View>
                 </View>
+              </Animated.View>
+            ))}
+          </>
+        )}
+
+        {/* ─── Prochainement ───────────────────────────────────────── */}
+        <Animated.View entering={enterListItem(5)}>
+          <SectionHeader
+            title={t('debats.upcomingTitle')}
+            style={[styles.sectionHeader, styles.sectionSpacing]}
+          />
+
+          {upcoming.length === 0 && !isLoading && (
+            <Text
+              style={{
+                color: colors.textTertiary,
+                fontSize: getFontSize(typography.sizes.bodySmall),
+                fontFamily: typography.families.body,
+              }}
+            >
+              {t('debats.noUpcoming')}
+            </Text>
+          )}
+        </Animated.View>
+
+        {upcoming.map((debate, index) => (
+          <Animated.View key={debate.id} entering={enterListItem(6 + index)}>
+            <View style={[styles.upcomingCard, { backgroundColor: colors.surface }, shadows.md]}>
+              <View style={[styles.upcomingDate, { backgroundColor: colors.primaryPale }]}>
+                <Ionicons name="calendar-outline" size={22} color={colors.primary} />
+              </View>
+
+              <View style={styles.upcomingTexts}>
+                <Text
+                  style={{
+                    color: colors.primaryMedium,
+                    fontSize: getFontSize(typography.sizes.micro),
+                    fontFamily: typography.families.bodyBold,
+                    letterSpacing: 0.6,
+                  }}
+                >
+                  {(debate.thematicLabel ?? t('debats.upcoming')).toUpperCase()}
+                </Text>
+                <Text
+                  numberOfLines={2}
+                  style={[
+                    styles.upcomingTitle,
+                    {
+                      color: colors.textPrimary,
+                      fontSize: getFontSize(typography.sizes.bodySmall),
+                      fontFamily: typography.families.headingSemiBold,
+                    },
+                  ]}
+                >
+                  {debate.title}
+                </Text>
                 <Text
                   style={{
                     color: colors.textTertiary,
@@ -263,136 +541,25 @@ export default function DebatesScreen() {
                     fontFamily: typography.families.body,
                   }}
                 >
-                  {replay.date}
+                  {formatDateHeure(debate.startsAt)}
                 </Text>
               </View>
 
-              <Text
-                style={[
-                  styles.replayTitle,
-                  {
-                    color: colors.textPrimary,
-                    fontSize: getFontSize(typography.sizes.body),
-                    fontFamily: typography.families.headingSemiBold,
-                  },
-                ]}
-              >
-                {replay.title}
-              </Text>
-
-              <Text
-                style={[
-                  styles.replaySummary,
-                  {
-                    color: colors.textSecondary,
-                    fontSize: getFontSize(typography.sizes.bodySmall),
-                    fontFamily: typography.families.body,
-                  },
-                ]}
-              >
-                {replay.summary}
-              </Text>
-
-              <View style={styles.replayFooter}>
-                <View style={styles.tags}>
-                  {replay.tags.map((tag) => (
-                    <View
-                      key={tag}
-                      style={[styles.tag, { backgroundColor: colors.surface }]}
-                    >
-                      <Text
-                        style={{
-                          color: colors.primary,
-                          fontSize: getFontSize(typography.sizes.micro),
-                          fontFamily: typography.families.bodyMedium,
-                        }}
-                      >
-                        {tag}
-                      </Text>
-                    </View>
-                  ))}
-                </View>
-
-                <PressableScale
-                  onPress={() => {
-                    /* TODO(backend) : lecture du résumé audio du débat */
-                  }}
-                  scaleTo={motion.scale.chip}
-                  accessibilityRole="button"
-                  accessibilityLabel={`${t('debats.listen')} — ${replay.title}`}
-                  style={styles.listenButton}
-                >
-                  <Ionicons name="play-circle" size={19} color={colors.secondary} />
-                  <Text
-                    style={{
-                      color: colors.secondary,
-                      fontSize: getFontSize(typography.sizes.caption),
-                      fontFamily: typography.families.bodyBold,
-                    }}
-                  >
-                    {t('debats.listen')}
-                  </Text>
-                </PressableScale>
-              </View>
+              <Button
+                label={
+                  reminders[debate.id]
+                    ? t('debats.reminderSet')
+                    : t('debats.remindMe')
+                }
+                onPress={() => void basculerRappel(debate)}
+                variant={reminders[debate.id] ? 'primary' : 'outline'}
+                icon={reminders[debate.id] ? 'notifications' : 'notifications-outline'}
+                size="sm"
+                haptic="light"
+              />
             </View>
           </Animated.View>
         ))}
-
-        {/* ─── Prochainement ───────────────────────────────────────── */}
-        <Animated.View entering={enterListItem(5)}>
-          <SectionHeader title={t('debats.upcomingTitle')} style={styles.sectionHeader} />
-
-          <View style={[styles.upcomingCard, { backgroundColor: colors.surface }, shadows.md]}>
-            <View style={[styles.upcomingDate, { backgroundColor: colors.primaryPale }]}>
-              <Ionicons name="calendar-outline" size={22} color={colors.primary} />
-            </View>
-
-            <View style={styles.upcomingTexts}>
-              <Text
-                style={{
-                  color: colors.primaryMedium,
-                  fontSize: getFontSize(typography.sizes.micro),
-                  fontFamily: typography.families.bodyBold,
-                  letterSpacing: 0.6,
-                }}
-              >
-                {t('debats.upcoming').toUpperCase()}
-              </Text>
-              <Text
-                numberOfLines={2}
-                style={[
-                  styles.upcomingTitle,
-                  {
-                    color: colors.textPrimary,
-                    fontSize: getFontSize(typography.sizes.bodySmall),
-                    fontFamily: typography.families.headingSemiBold,
-                  },
-                ]}
-              >
-                {UPCOMING.title}
-              </Text>
-              <Text
-                style={{
-                  color: colors.textTertiary,
-                  fontSize: getFontSize(typography.sizes.micro),
-                  fontFamily: typography.families.body,
-                }}
-              >
-                {UPCOMING.date}
-              </Text>
-            </View>
-
-            <Button
-              label={t('debats.remindMe')}
-              onPress={() => {
-                /* TODO(backend) : abonnement au rappel de démarrage du débat */
-              }}
-              variant="outline"
-              size="sm"
-              haptic="light"
-            />
-          </View>
-        </Animated.View>
       </ScrollView>
     </Screen>
   );
@@ -418,6 +585,26 @@ const styles = StyleSheet.create({
   sectionHeader: {
     marginBottom: spacing.md,
   },
+  sectionSpacing: {
+    marginTop: spacing.xl,
+  },
+  loadingBlock: {
+    paddingVertical: spacing.xl,
+    alignItems: 'center',
+  },
+  emptyCard: {
+    alignItems: 'center',
+    gap: spacing.sm,
+    borderRadius: borderRadius.xl,
+    padding: spacing.xl,
+  },
+  emptyText: {
+    textAlign: 'center',
+    lineHeight: 19,
+  },
+  liveBlock: {
+    marginBottom: spacing.lg,
+  },
   featuredCard: {
     height: 260,
     borderRadius: borderRadius.xxl,
@@ -435,40 +622,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingVertical: 5,
     borderRadius: borderRadius.full,
+    flexShrink: 1,
   },
   featuredBottom: {},
   featuredTitle: {
     color: '#FFFFFF',
     lineHeight: 27,
-    marginBottom: spacing.md,
   },
-  featuredMeta: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    justifyContent: 'space-between',
-    gap: spacing.md,
-  },
-  speakerBlock: {
-    flex: 1,
-  },
-  metaLabel: {
-    color: 'rgba(255, 255, 255, 0.62)',
-    marginBottom: 1,
-  },
-  metaValue: {
-    color: '#FFFFFF',
-  },
-  viewersChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    paddingHorizontal: spacing.md,
-    paddingVertical: 6,
-    borderRadius: borderRadius.full,
+  featuredDescription: {
+    color: 'rgba(255, 255, 255, 0.82)',
+    lineHeight: 17,
+    marginTop: spacing.sm,
   },
   joinButton: {
     marginTop: spacing.md,
-    marginBottom: spacing.xxl,
   },
   replayCard: {
     borderRadius: borderRadius.xl,
@@ -494,6 +661,9 @@ const styles = StyleSheet.create({
   replaySummary: {
     lineHeight: 19,
     marginBottom: spacing.lg,
+  },
+  replaySpacer: {
+    height: spacing.md,
   },
   replayFooter: {
     flexDirection: 'row',
@@ -523,7 +693,7 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     borderRadius: borderRadius.xl,
     padding: spacing.lg,
-    marginTop: spacing.xs,
+    marginBottom: spacing.md,
   },
   upcomingDate: {
     width: 48,

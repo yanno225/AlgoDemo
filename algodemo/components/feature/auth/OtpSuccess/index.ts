@@ -1,0 +1,1 @@
+export { OtpSuccess } from './OtpSuccess';

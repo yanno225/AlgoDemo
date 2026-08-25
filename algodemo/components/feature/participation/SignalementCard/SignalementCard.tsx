@@ -34,9 +34,12 @@ export interface Signalement {
   category: string;
   time: string;
   status: SignalementStatus;
+  /** Libellé affiché dans la pastille — sinon dérivé de `status`. */
+  statusLabel?: string;
   imageUri?: string;
-  supports: number;
-  comments: number;
+  /** Compteurs sociaux — omis tant que l'API ne les porte pas (rien d'inventé). */
+  supports?: number;
+  comments?: number;
 }
 
 export interface SignalementCardProps {
@@ -57,7 +60,7 @@ export const SignalementCard: React.FC<SignalementCardProps> = ({ item, onPress 
   const { t } = useTranslation();
 
   const [isSupported, setIsSupported] = useState(false);
-  const [supports, setSupports] = useState(item.supports);
+  const [supports, setSupports] = useState(item.supports ?? 0);
 
   const supportScale = useSharedValue(1);
 
@@ -74,10 +77,14 @@ export const SignalementCard: React.FC<SignalementCardProps> = ({ item, onPress 
     transform: [{ scale: supportScale.value }],
   }));
 
+  // La rangée sociale n'apparaît que si l'API fournit réellement les compteurs.
+  const hasSocialRow = item.supports !== undefined || item.comments !== undefined;
+
   const statusLabel =
-    item.status === 'resolved'
+    item.statusLabel ??
+    (item.status === 'resolved'
       ? t('participation.status.resolved')
-      : t('participation.status.inProgress');
+      : t('participation.status.inProgress'));
 
   return (
     <PressableScale
@@ -173,40 +180,42 @@ export const SignalementCard: React.FC<SignalementCardProps> = ({ item, onPress 
           {item.description}
         </Text>
 
-        {/* ─── Actions ─────────────────────────────────────────────── */}
-        <View style={[styles.actions, { borderTopColor: colors.borderLight }]}>
-          <Animated.View style={supportStyle}>
+        {/* ─── Actions — seulement quand l'API porte les compteurs ──── */}
+        {hasSocialRow && (
+          <View style={[styles.actions, { borderTopColor: colors.borderLight }]}>
+            <Animated.View style={supportStyle}>
+              <CardAction
+                icon={isSupported ? 'thumbs-up' : 'thumbs-up-outline'}
+                label={String(supports)}
+                tint={isSupported ? colors.primary : colors.textSecondary}
+                onPress={toggleSupport}
+                accessibilityLabel={t('participation.signalements.actions.support')}
+                haptic="medium"
+              />
+            </Animated.View>
+
             <CardAction
-              icon={isSupported ? 'thumbs-up' : 'thumbs-up-outline'}
-              label={String(supports)}
-              tint={isSupported ? colors.primary : colors.textSecondary}
-              onPress={toggleSupport}
-              accessibilityLabel={t('participation.signalements.actions.support')}
-              haptic="medium"
+              icon="chatbubble-outline"
+              label={String(item.comments ?? 0)}
+              tint={colors.textSecondary}
+              onPress={() => {
+                /* TODO(backend) : fil de commentaires modérés du signalement */
+              }}
+              accessibilityLabel={t('participation.signalements.actions.comment')}
             />
-          </Animated.View>
 
-          <CardAction
-            icon="chatbubble-outline"
-            label={String(item.comments)}
-            tint={colors.textSecondary}
-            onPress={() => {
-              /* TODO(backend) : fil de commentaires modérés du signalement */
-            }}
-            accessibilityLabel={t('participation.signalements.actions.comment')}
-          />
+            <View style={styles.spacer} />
 
-          <View style={styles.spacer} />
-
-          <CardAction
-            icon="share-outline"
-            tint={colors.textSecondary}
-            onPress={() => {
-              /* TODO(backend) : partage d'un lien profond vers le signalement */
-            }}
-            accessibilityLabel={t('participation.signalements.actions.share')}
-          />
-        </View>
+            <CardAction
+              icon="share-outline"
+              tint={colors.textSecondary}
+              onPress={() => {
+                /* TODO(backend) : partage d'un lien profond vers le signalement */
+              }}
+              accessibilityLabel={t('participation.signalements.actions.share')}
+            />
+          </View>
+        )}
       </View>
     </PressableScale>
   );

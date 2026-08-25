@@ -23,6 +23,7 @@ import { useAccessibility } from '../../hooks/useAccessibility';
 import { useFilterStore } from '../../stores/filterStore';
 import { ThematicFilterBar } from '../../components/feature/feed/ThematicFilterBar';
 import { ImmersiveCard, FeedItem } from '../../components/feature/feed/ImmersiveCard';
+import { listFeed, listMyLikes } from '../../services/api/feed';
 import { PressableScale } from '../../components/ui/PressableScale';
 import { BrandLogo } from '../../components/ui/BrandLogo';
 import { Skeleton } from '../../components/ui/Skeleton';
@@ -38,70 +39,8 @@ import {
 
 const AnimatedFlatList = Animated.createAnimatedComponent(FlatList<FeedItem>);
 
-// ─── Contenus de démonstration ───────────────────────────────────────
-// TODO(backend) : remplacer par GET /feed (pagination + filtres serveur).
-const MOCK_NEWS: FeedItem[] = [
-  {
-    id: 'news_1',
-    title: 'Adoption de la nouvelle loi sur la protection des données personnelles',
-    summary:
-      'Le parlement ivoirien a voté un nouveau cadre renforçant les sanctions contre les fuites de données et définissant les droits numériques des citoyens.',
-    body: "Le parlement de Côte d'Ivoire a adopté hier à l'unanimité la nouvelle loi sur la protection des données à caractère personnel. Cette loi impose des amendes sévères aux entreprises en cas de violation de la vie privée et crée une autorité indépendante de régulation. Les citoyens disposent désormais d'un droit de regard et de suppression direct sur leurs informations stockées.",
-    thematicId: 'droit',
-    source: 'Ministère de la Transition Numérique (CI)',
-    verificationLevel: 3,
-    isOfficial: true,
-    date: '15 Juillet 2026',
-    imageUrl: 'https://images.unsplash.com/photo-1589829545856-d10d557cf95f?q=80&w=1080',
-    likesCount: 142,
-    commentsCount: 18,
-  },
-  {
-    id: 'news_2',
-    title: 'Rumeur sur la hausse du prix du cacao : le Conseil Café-Cacao dément',
-    summary:
-      "Une fausse note d'information circulant sur les réseaux sociaux annonçait une augmentation immédiate de 15% du prix garanti aux producteurs.",
-    body: "Le Conseil Café-Cacao dément catégoriquement la hausse de 15% diffusée hier sur WhatsApp. Le prix garanti reste fixé conformément au barème officiel de la campagne en cours. L'institution appelle les agriculteurs à la vigilance et à ne se référer qu'aux communiqués officiels diffusés dans les médias nationaux.",
-    thematicId: 'societe_vivant',
-    source: "Conseil Café-Cacao Côte d'Ivoire",
-    verificationLevel: 2,
-    isOfficial: true,
-    date: '14 Juillet 2026',
-    imageUrl: 'https://images.unsplash.com/photo-1587132137056-bfbf0166836e?q=80&w=1080',
-    likesCount: 89,
-    commentsCount: 34,
-  },
-  {
-    id: 'news_3',
-    title: "Lancement du Forum National de la Jeunesse et de l'Emploi à Yamoussoukro",
-    summary:
-      "Plus de 2 000 jeunes se réunissent pour échanger avec des mentors et postuler à des offres de stage et d'emploi directes.",
-    body: "Le Forum de la Jeunesse et de l'Emploi a ouvert ses portes à Yamoussoukro ce matin. Organisé par le Ministère de la Jeunesse, cet événement propose des ateliers de formation sur le codage numérique, l'agriculture moderne et l'entrepreneuriat vert. Des stands de recrutement direct sont également disponibles.",
-    thematicId: 'jeunesse_societe',
-    source: 'Agence Emploi Jeunes',
-    verificationLevel: 3,
-    isOfficial: true,
-    date: '12 Juillet 2026',
-    imageUrl: 'https://images.unsplash.com/photo-1540575467063-178a50c2df87?q=80&w=1080',
-    likesCount: 256,
-    commentsCount: 41,
-  },
-  {
-    id: 'news_4',
-    title: 'Débat houleux sur la parité homme-femme dans les conseils régionaux',
-    summary:
-      "Une proposition de loi vise à imposer 50% de candidates sur les listes électorales locales sous peine d'invalidation.",
-    body: "Les débats parlementaires concernant la représentation équitable des genres dans les instances locales s'intensifient. La commission des affaires sociales examine un texte de loi prévoyant la parité stricte sur les listes électorales des conseils régionaux et municipaux, une mesure soutenue par de nombreuses ONG de défense des droits des femmes.",
-    thematicId: 'genre_societe',
-    source: "Observatoire National de l'Équité",
-    verificationLevel: 1,
-    isOfficial: false,
-    date: '10 Juillet 2026',
-    imageUrl: 'https://images.unsplash.com/photo-1573164713714-d95e436ab8d6?q=80&w=1080',
-    likesCount: 73,
-    commentsCount: 96,
-  },
-];
+/** Délai avant d'interroger le serveur pendant la frappe d'une recherche. */
+const DEBOUNCE_RECHERCHE = 350;
 
 export default function FeedScreen() {
   const { t } = useTranslation();
@@ -115,37 +54,102 @@ export default function FeedScreen() {
   const [activeIndex, setActiveIndex] = useState(0);
   const searchInputRef = useRef<TextInput>(null);
 
+  const [items, setItems] = useState<FeedItem[]>([]);
+  const [hasMore, setHasMore] = useState(false);
+  const [myLikes, setMyLikes] = useState<Set<string>>(new Set());
+  // Numéro de la dernière page chargée + garde anti-chargements concurrents.
+  const pageRef = useRef(1);
+  const isFetchingRef = useRef(false);
+  // Chaque changement de filtre invalide les réponses des requêtes en vol.
+  const requeteRef = useRef(0);
+
   const scrollY = useSharedValue(0);
   const chromeOpacity = useSharedValue(1);
 
   // La carte occupe tout l'écran : la tab bar flotte par-dessus.
   const itemHeight = windowHeight;
 
+  // RG-FEED-03 : recherche et filtre thématique côté serveur. L'API n'accepte
+  // qu'UNE thématique : au-delà, on charge large et on filtre localement.
+  const thematicServeur =
+    selectedThematics.length === 1 ? selectedThematics[0] : undefined;
+
+  const chargerPremierePage = useCallback(async () => {
+    const requete = ++requeteRef.current;
+    isFetchingRef.current = true;
+    setIsLoading(true);
+    try {
+      const page = await listFeed({
+        page: 1,
+        q: searchQuery || undefined,
+        thematic: thematicServeur,
+      });
+      if (requete !== requeteRef.current) return; // Filtre changé entre-temps.
+      pageRef.current = 1;
+      setItems(page.items);
+      setHasMore(page.suivante);
+    } catch {
+      if (requete === requeteRef.current) {
+        setItems([]);
+        setHasMore(false);
+      }
+    } finally {
+      if (requete === requeteRef.current) setIsLoading(false);
+      isFetchingRef.current = false;
+    }
+  }, [searchQuery, thematicServeur]);
+
+  // Premier chargement + rechargement à chaque filtre, recherche débouncée.
   useEffect(() => {
-    const timer = setTimeout(() => setIsLoading(false), 900);
+    const timer = setTimeout(
+      () => void chargerPremierePage(),
+      searchQuery ? DEBOUNCE_RECHERCHE : 0
+    );
     return () => clearTimeout(timer);
+  }, [chargerPremierePage, searchQuery]);
+
+  // Les cœurs déjà posés — chargés une fois, en parallèle du fil.
+  useEffect(() => {
+    listMyLikes()
+      .then(setMyLikes)
+      .catch(() => {
+        // Sans réseau, les cœurs partent éteints : le serveur corrigera au tap.
+      });
   }, []);
 
-  // RG-FEED-03 : filtrage combiné thématiques + mot-clé.
+  const chargerPageSuivante = useCallback(async () => {
+    if (isFetchingRef.current || !hasMore) return;
+    const requete = requeteRef.current;
+    isFetchingRef.current = true;
+    try {
+      const page = await listFeed({
+        page: pageRef.current + 1,
+        q: searchQuery || undefined,
+        thematic: thematicServeur,
+      });
+      if (requete !== requeteRef.current) return;
+      pageRef.current = page.page;
+      setItems((current) => {
+        // Un contenu publié pendant le défilement décale la pagination :
+        // on dédoublonne pour qu'aucune carte n'apparaisse deux fois.
+        const connus = new Set(current.map((item) => item.id));
+        return [...current, ...page.items.filter((item) => !connus.has(item.id))];
+      });
+      setHasMore(page.suivante);
+    } catch {
+      // Fin de liste silencieuse : l'utilisateur retentera en défilant.
+    } finally {
+      isFetchingRef.current = false;
+    }
+  }, [hasMore, searchQuery, thematicServeur]);
+
+  // Filtre multi-thématiques : le complément se fait localement.
   const filteredNews = useMemo(() => {
-    let result = MOCK_NEWS;
-
-    if (selectedThematics.length > 0) {
-      result = result.filter((item) => selectedThematics.includes(item.thematicId as any));
-    }
-
-    if (searchQuery) {
-      const query = searchQuery.toLowerCase();
-      result = result.filter(
-        (item) =>
-          item.title.toLowerCase().includes(query) ||
-          item.summary.toLowerCase().includes(query) ||
-          item.body.toLowerCase().includes(query)
-      );
-    }
-
-    return result;
-  }, [selectedThematics, searchQuery]);
+    if (selectedThematics.length <= 1) return items;
+    return items.filter((item) =>
+      (selectedThematics as readonly string[]).includes(item.thematicId)
+    );
+  }, [items, selectedThematics]);
 
   const scrollHandler = useAnimatedScrollHandler({
     onScroll: (event) => {
@@ -183,9 +187,10 @@ export default function FeedScreen() {
         isActive={index === activeIndex}
         topInset={insets.top + 96}
         bottomInset={TAB_BAR_CLEARANCE + insets.bottom}
+        initiallyLiked={myLikes.has(item.id)}
       />
     ),
-    [activeIndex, insets.bottom, insets.top, itemHeight, scrollY]
+    [activeIndex, insets.bottom, insets.top, itemHeight, myLikes, scrollY]
   );
 
   // Chaque élément a une hauteur fixe : la fournir évite à la liste de
@@ -239,6 +244,9 @@ export default function FeedScreen() {
           showsVerticalScrollIndicator={false}
           onViewableItemsChanged={onViewableItemsChanged}
           viewabilityConfig={viewabilityConfig}
+          // Pagination : la page suivante part quand il reste ~2 cartes.
+          onEndReached={() => void chargerPageSuivante()}
+          onEndReachedThreshold={2}
           // Une seule carte est visible : garder un voisin de chaque côté
           // suffit et évite de monter quatre médias plein écran en mémoire.
           windowSize={3}

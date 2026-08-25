@@ -1,101 +1,143 @@
-import React, { useState } from 'react';
-import { StyleSheet, View, Text, FlatList, Modal } from 'react-native';
+import React, { useCallback, useState } from 'react';
+import {
+  StyleSheet,
+  View,
+  Text,
+  FlatList,
+  Modal,
+  ActivityIndicator,
+  Alert,
+} from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Animated, {
-  useAnimatedStyle,
-  useSharedValue,
-  withSpring,
-  withTiming,
-  interpolateColor,
-} from 'react-native-reanimated';
+import Animated from 'react-native-reanimated';
 import { useAccessibility } from '../../../hooks/useAccessibility';
 import { useAuthStore } from '../../../stores/authStore';
 import { Button } from '../../../components/ui/Button';
 import { PressableScale } from '../../../components/ui/PressableScale';
 import { TAB_BAR_CLEARANCE } from '../../../components/ui/Screen';
-import { enterListItem, enterSheet } from '../../../components/ui/motion';
+import { enterListItem, enterSheet, enterFade } from '../../../components/ui/motion';
 import { StatusPill } from '../../../components/feature/participation/StatusPill';
+import { ProgressBar } from '../../../components/feature/participation/ProgressBar';
+import { toApiError } from '../../../services/api/client';
+import {
+  listConsultations,
+  voteConsultation,
+  hasVoted,
+  getResults,
+  type Consultation,
+  type ConsultationResult,
+} from '../../../services/api/consultations';
 import {
   spacing,
   typography,
   borderRadius,
   shadows,
   motion,
-  withAlpha,
 } from '../../../constants/theme';
 
-interface Sondage {
-  id: string;
-  title: string;
-  description: string;
-  thematicLabel: string;
-  endDate: string;
-  isOpen: boolean;
-  options: string[];
-}
+/**
+ * Sondages citoyens : des questions rapides portées par le MÊME moteur que
+ * les consultations (émargement + urne séparés — vote secret), simplement
+ * typées SONDAGE côté backend et présentées dans leur propre onglet.
+ */
 
-// TODO(backend) : remplacer par GET /sondages
-const MOCK_SONDAGES: Sondage[] = [
-  {
-    id: 'sondage_1',
-    title: 'Plan de solarisation des toits communaux',
-    description:
-      'Votez pour le déploiement prioritaire des panneaux photovoltaïques sur les établissements publics de la zone sud.',
-    thematicLabel: 'Transition énergétique',
-    endDate: '15 Sept.',
-    isOpen: true,
-    options: ['Oui, tout à fait', "Non, c'est trop coûteux", 'Mitigé'],
-  },
-  {
-    id: 'sondage_2',
-    title: 'Extension de la zone cyclable Nord-Ouest',
-    description:
-      'Consultation terminée. Les résultats sont en cours d’analyse par la commission de développement urbain.',
-    thematicLabel: 'Mobilités',
-    endDate: '01 Août',
-    isOpen: false,
-    options: ['Oui, indispensable', 'Non, inutile'],
-  },
-  {
-    id: 'sondage_3',
-    title: 'Implantation de cabinets pluridisciplinaires en centre-ville',
-    description:
-      'Donnez votre avis sur la réponse à apporter à la désertification médicale locale.',
-    thematicLabel: 'Santé publique',
-    endDate: '22 Sept.',
-    isOpen: true,
-    options: ['Favorable', 'Défavorable', 'Sans opinion'],
-  },
-];
+const formatDateCourte = (iso: string) =>
+  new Date(iso).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' });
+
+type Feuille =
+  | { type: 'vote'; sondage: Consultation }
+  | { type: 'resultats'; sondage: Consultation }
+  | null;
 
 export default function SondagesScreen() {
   const { t } = useTranslation();
   const { colors, getFontSize } = useAccessibility();
   const { isAuthenticated } = useAuthStore();
   const insets = useSafeAreaInsets();
+  const router = useRouter();
 
-  const [selected, setSelected] = useState<Sondage | null>(null);
-  const [choice, setChoice] = useState<string | null>(null);
-  // RG-CON-04 / Correction #3 : un vote par consultation, bouton neutralisé ensuite.
-  const [votes, setVotes] = useState<Record<string, string>>({});
+  const [sondages, setSondages] = useState<Consultation[] | null>(null);
+  const [votedIds, setVotedIds] = useState<Set<string>>(new Set());
+  const [feuille, setFeuille] = useState<Feuille>(null);
+  const [choix, setChoix] = useState<string | null>(null);
+  const [isVoting, setIsVoting] = useState(false);
+  const [resultats, setResultats] = useState<ConsultationResult[] | null>(null);
 
-  const openSondage = (item: Sondage) => {
-    setSelected(item);
-    setChoice(votes[item.id] ?? null);
+  const charger = useCallback(async () => {
+    try {
+      const liste = await listConsultations('toutes', 'SONDAGE');
+      const poids = { open: 0, upcoming: 1, closed: 2 } as const;
+      liste.sort((a, b) => poids[a.status] - poids[b.status]);
+      setSondages(liste);
+
+      if (useAuthStore.getState().isAuthenticated) {
+        const ouverts = liste.filter((s) => s.status === 'open');
+        const etats = await Promise.all(
+          ouverts.map((s) => hasVoted(s.id).catch(() => false))
+        );
+        setVotedIds(
+          new Set(ouverts.filter((_, index) => etats[index]).map((s) => s.id))
+        );
+      }
+    } catch {
+      setSondages((current) => current ?? []);
+    }
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      void charger();
+    }, [charger])
+  );
+
+  const ouvrirVote = (sondage: Consultation) => {
+    if (!isAuthenticated) {
+      Alert.alert(
+        t('participation.sondages.modalTitle'),
+        t('participation.consultations.loginToVote'),
+        [
+          { text: t('common.cancel'), style: 'cancel' },
+          { text: t('liveRoom.signIn'), onPress: () => router.push('/login') },
+        ]
+      );
+      return;
+    }
+    setChoix(null);
+    setFeuille({ type: 'vote', sondage });
   };
 
-  const submitVote = () => {
-    if (!selected || !choice) return;
-    setVotes((current) => ({ ...current, [selected.id]: choice }));
-    setSelected(null);
+  const deposerBulletin = async () => {
+    if (feuille?.type !== 'vote' || !choix || isVoting) return;
+    setIsVoting(true);
+    try {
+      await voteConsultation(feuille.sondage.id, choix);
+      setVotedIds((current) => new Set(current).add(feuille.sondage.id));
+      setFeuille(null);
+    } catch (erreur) {
+      Alert.alert(
+        t('participation.sondages.modalTitle'),
+        toApiError(erreur).message || t('participation.consultations.voteError')
+      );
+    } finally {
+      setIsVoting(false);
+    }
+  };
+
+  const ouvrirResultats = (sondage: Consultation) => {
+    setResultats(null);
+    setFeuille({ type: 'resultats', sondage });
+    getResults(sondage.id)
+      .then(setResultats)
+      .catch(() => setResultats([]));
   };
 
   return (
     <>
       <FlatList
-        data={MOCK_SONDAGES}
+        data={sondages ?? []}
         keyExtractor={(item) => item.id}
         style={{ backgroundColor: colors.background }}
         contentContainerStyle={[
@@ -104,20 +146,20 @@ export default function SondagesScreen() {
         ]}
         showsVerticalScrollIndicator={false}
         renderItem={({ item, index }) => {
-          const hasVoted = !!votes[item.id];
+          const aVote = votedIds.has(item.id);
           return (
-            <Animated.View entering={enterListItem(index)}>
+            <Animated.View entering={enterListItem(Math.min(index, 6))}>
               <View style={[styles.card, { backgroundColor: colors.surface }, shadows.md]}>
                 <View style={styles.cardHeader}>
-                  <StatusPill
-                    label={
-                      item.isOpen
-                        ? t('participation.status.open')
-                        : t('participation.status.closed')
-                    }
-                    tone={item.isOpen ? 'open' : 'closed'}
-                    pulse={item.isOpen}
-                  />
+                  {item.status === 'open' && (
+                    <StatusPill label={t('participation.status.open')} tone="open" pulse />
+                  )}
+                  {item.status === 'upcoming' && (
+                    <StatusPill label={t('participation.status.upcoming')} tone="progress" />
+                  )}
+                  {item.status === 'closed' && (
+                    <StatusPill label={t('participation.status.closed')} tone="closed" />
+                  )}
                   <Text
                     style={{
                       color: colors.textTertiary,
@@ -125,24 +167,15 @@ export default function SondagesScreen() {
                       fontFamily: typography.families.bodyMedium,
                     }}
                   >
-                    {item.isOpen
-                      ? t('participation.status.closesOn', { date: item.endDate })
-                      : t('participation.status.closed')}
+                    {item.status === 'upcoming'
+                      ? t('participation.status.opensOn', {
+                          date: formatDateCourte(item.opensAt),
+                        })
+                      : t('participation.status.closesOn', {
+                          date: formatDateCourte(item.closesAt),
+                        })}
                   </Text>
                 </View>
-
-                <Text
-                  style={[
-                    styles.thematic,
-                    {
-                      color: colors.textTertiary,
-                      fontSize: getFontSize(typography.sizes.micro),
-                      fontFamily: typography.families.bodyBold,
-                    },
-                  ]}
-                >
-                  {item.thematicLabel.toUpperCase()}
-                </Text>
 
                 <Text
                   style={[
@@ -167,52 +200,88 @@ export default function SondagesScreen() {
                     },
                   ]}
                 >
-                  {item.description}
+                  {item.plainSummary}
                 </Text>
 
-                <Button
-                  label={
-                    !item.isOpen
-                      ? t('participation.sondages.voteClosed')
-                      : hasVoted
-                        ? t('participation.sondages.voted')
-                        : t('participation.sondages.vote')
-                  }
-                  onPress={() => openSondage(item)}
-                  disabled={!item.isOpen || hasVoted}
-                  variant={hasVoted ? 'outline' : 'primary'}
-                  icon={hasVoted ? 'checkmark-circle' : undefined}
-                  haptic="medium"
-                />
+                {item.status === 'open' &&
+                  (aVote ? (
+                    <View style={styles.votedRow}>
+                      <Ionicons name="checkmark-circle" size={17} color={colors.success} />
+                      <Text
+                        style={{
+                          color: colors.success,
+                          fontSize: getFontSize(typography.sizes.bodySmall),
+                          fontFamily: typography.families.bodySemiBold,
+                        }}
+                      >
+                        {t('participation.sondages.voted')}
+                      </Text>
+                    </View>
+                  ) : (
+                    <Button
+                      label={t('participation.sondages.vote')}
+                      onPress={() => ouvrirVote(item)}
+                      icon="checkbox-outline"
+                      haptic="medium"
+                      size="sm"
+                    />
+                  ))}
+
+                {item.status === 'closed' &&
+                  (item.resultsPublished ? (
+                    <Button
+                      label={t('participation.consultations.seeResults')}
+                      onPress={() => ouvrirResultats(item)}
+                      variant="outline"
+                      icon="stats-chart-outline"
+                      size="sm"
+                    />
+                  ) : (
+                    <Text
+                      style={{
+                        color: colors.textTertiary,
+                        fontSize: getFontSize(typography.sizes.caption),
+                        fontFamily: typography.families.bodyMedium,
+                      }}
+                    >
+                      {t('participation.consultations.resultsPending')}
+                    </Text>
+                  ))}
               </View>
             </Animated.View>
           );
         }}
         ListEmptyComponent={
-          <View style={styles.empty}>
-            <Ionicons name="bar-chart-outline" size={44} color={colors.textTertiary} />
-            <Text
-              style={{
-                color: colors.textSecondary,
-                fontSize: getFontSize(typography.sizes.bodySmall),
-                fontFamily: typography.families.body,
-              }}
-            >
-              {t('participation.sondages.empty')}
-            </Text>
-          </View>
+          sondages === null ? (
+            <View style={styles.empty}>
+              <ActivityIndicator size="small" color={colors.primary} />
+            </View>
+          ) : (
+            <View style={styles.empty}>
+              <Ionicons name="stats-chart-outline" size={44} color={colors.textTertiary} />
+              <Text
+                style={{
+                  color: colors.textSecondary,
+                  fontSize: getFontSize(typography.sizes.bodySmall),
+                  fontFamily: typography.families.body,
+                }}
+              >
+                {t('participation.sondages.empty')}
+              </Text>
+            </View>
+          )
         }
       />
 
-      {/* ─── Feuille de vote ────────────────────────────────────────── */}
+      {/* ─── Feuille : vote secret / résultats ──────────────────────── */}
       <Modal
-        visible={!!selected}
+        visible={!!feuille}
         transparent
         animationType="fade"
-        onRequestClose={() => setSelected(null)}
+        onRequestClose={() => setFeuille(null)}
       >
         <View style={[styles.overlay, { backgroundColor: colors.overlay }]}>
-          {selected && (
+          {feuille && (
             <Animated.View
               entering={enterSheet()}
               style={[styles.sheet, { backgroundColor: colors.surface }, shadows.lg]}
@@ -227,10 +296,12 @@ export default function SondagesScreen() {
                     fontFamily: typography.families.headingSemiBold,
                   }}
                 >
-                  {t('participation.sondages.modalTitle')}
+                  {feuille.type === 'vote'
+                    ? t('participation.sondages.modalTitle')
+                    : t('participation.consultations.resultsTitle')}
                 </Text>
                 <PressableScale
-                  onPress={() => setSelected(null)}
+                  onPress={() => setFeuille(null)}
                   scaleTo={motion.scale.chip}
                   accessibilityRole="button"
                   accessibilityLabel={t('common.cancel')}
@@ -244,48 +315,122 @@ export default function SondagesScreen() {
                 style={[
                   styles.sheetQuestion,
                   {
-                    color: colors.textPrimary,
-                    fontSize: getFontSize(typography.sizes.body),
-                    fontFamily: typography.families.bodySemiBold,
+                    color: colors.textSecondary,
+                    fontSize: getFontSize(typography.sizes.bodySmall),
+                    fontFamily: typography.families.body,
                   },
                 ]}
               >
-                {selected.title}
+                {feuille.sondage.title}
               </Text>
 
-              {/* Correction #4 : le vote porte toujours sur une option existante. */}
-              <View style={styles.options}>
-                {selected.options.map((option) => (
-                  <VoteOption
-                    key={option}
-                    label={option}
-                    isSelected={choice === option}
-                    onPress={() => setChoice(option)}
+              {feuille.type === 'vote' && (
+                <>
+                  <View style={styles.options}>
+                    {feuille.sondage.options.map((option) => {
+                      const isSelected = choix === option.id;
+                      return (
+                        <PressableScale
+                          key={option.id}
+                          onPress={() => setChoix(option.id)}
+                          scaleTo={0.985}
+                          accessibilityRole="radio"
+                          accessibilityState={{ selected: isSelected }}
+                          accessibilityLabel={option.label}
+                          style={[
+                            styles.option,
+                            {
+                              backgroundColor: colors.surfaceElevated,
+                              borderColor: isSelected ? colors.primary : 'transparent',
+                            },
+                          ]}
+                        >
+                          <Text
+                            style={{
+                              flex: 1,
+                              color: colors.textPrimary,
+                              fontSize: getFontSize(typography.sizes.bodySmall),
+                              fontFamily: isSelected
+                                ? typography.families.bodySemiBold
+                                : typography.families.body,
+                            }}
+                          >
+                            {option.label}
+                          </Text>
+                          <View
+                            style={[
+                              styles.radio,
+                              { borderColor: isSelected ? colors.primary : colors.border },
+                            ]}
+                          >
+                            {isSelected && (
+                              <View
+                                style={[styles.radioDot, { backgroundColor: colors.primary }]}
+                              />
+                            )}
+                          </View>
+                        </PressableScale>
+                      );
+                    })}
+                  </View>
+
+                  <View style={styles.secretRow}>
+                    <Ionicons name="lock-closed" size={14} color={colors.textTertiary} />
+                    <Text
+                      style={{
+                        flex: 1,
+                        color: colors.textTertiary,
+                        fontSize: getFontSize(typography.sizes.micro),
+                        fontFamily: typography.families.body,
+                        lineHeight: 16,
+                      }}
+                    >
+                      {t('participation.sondages.anonymousNotice')}
+                    </Text>
+                  </View>
+
+                  <Button
+                    label={t('participation.sondages.submitVote')}
+                    onPress={() => void deposerBulletin()}
+                    disabled={!choix || isVoting}
+                    haptic="success"
+                    size="lg"
                   />
+                </>
+              )}
+
+              {feuille.type === 'resultats' &&
+                (resultats === null ? (
+                  <View style={styles.resultsLoading}>
+                    <ActivityIndicator size="small" color={colors.primary} />
+                  </View>
+                ) : (
+                  <Animated.View entering={enterFade()} style={styles.results}>
+                    {resultats.map((resultat, index) => {
+                      const total = resultats.reduce((somme, r) => somme + r.votes, 0);
+                      return (
+                        <ProgressBar
+                          key={resultat.optionId}
+                          value={total > 0 ? Math.round((resultat.votes / total) * 100) : 0}
+                          label={`${resultat.label} · ${resultat.votes}`}
+                          delay={index * 120}
+                        />
+                      );
+                    })}
+                    <Text
+                      style={{
+                        color: colors.textTertiary,
+                        fontSize: getFontSize(typography.sizes.caption),
+                        fontFamily: typography.families.bodyMedium,
+                        textAlign: 'center',
+                      }}
+                    >
+                      {t('participation.consultations.totalVotes', {
+                        count: resultats.reduce((somme, r) => somme + r.votes, 0),
+                      })}
+                    </Text>
+                  </Animated.View>
                 ))}
-              </View>
-
-              <View style={styles.notice}>
-                <Ionicons name="lock-closed" size={14} color={colors.textTertiary} />
-                <Text
-                  style={{
-                    flex: 1,
-                    color: colors.textTertiary,
-                    fontSize: getFontSize(typography.sizes.caption),
-                    fontFamily: typography.families.body,
-                  }}
-                >
-                  {t('participation.sondages.anonymousNotice')}
-                </Text>
-              </View>
-
-              <Button
-                label={t('participation.sondages.submitVote')}
-                onPress={submitVote}
-                disabled={!choice || !isAuthenticated}
-                haptic="success"
-                size="lg"
-              />
             </Animated.View>
           )}
         </View>
@@ -293,66 +438,6 @@ export default function SondagesScreen() {
     </>
   );
 }
-
-// ─── Option de vote ─────────────────────────────────────────────────
-const VoteOption: React.FC<{
-  label: string;
-  isSelected: boolean;
-  onPress: () => void;
-}> = ({ label, isSelected, onPress }) => {
-  const { colors, getFontSize } = useAccessibility();
-  const progress = useSharedValue(isSelected ? 1 : 0);
-
-  React.useEffect(() => {
-    progress.value = withTiming(isSelected ? 1 : 0, { duration: motion.durations.base });
-  }, [isSelected, progress]);
-
-  // Les bornes de couleur sont calculées sur le thread JS : un worklet ne peut
-  // pas appeler une fonction JS ordinaire, et refaire cette conversion à
-  // chaque frame serait de toute façon inutile.
-  const selectedBackground = withAlpha(colors.primary, 0.06);
-
-  const containerStyle = useAnimatedStyle(() => ({
-    borderColor: interpolateColor(progress.value, [0, 1], [colors.border, colors.primary]),
-    backgroundColor: interpolateColor(
-      progress.value,
-      [0, 1],
-      [colors.surface, selectedBackground]
-    ),
-  }));
-
-  const dotStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: withSpring(isSelected ? 1 : 0, motion.bounce) }],
-  }));
-
-  return (
-    <PressableScale
-      onPress={onPress}
-      scaleTo={0.985}
-      accessibilityRole="radio"
-      accessibilityState={{ selected: isSelected }}
-      accessibilityLabel={label}
-    >
-      <Animated.View style={[styles.option, containerStyle]}>
-        <Text
-          style={{
-            flex: 1,
-            color: colors.textPrimary,
-            fontSize: getFontSize(typography.sizes.bodySmall),
-            fontFamily: isSelected
-              ? typography.families.bodySemiBold
-              : typography.families.body,
-          }}
-        >
-          {label}
-        </Text>
-        <View style={[styles.radio, { borderColor: isSelected ? colors.primary : colors.border }]}>
-          <Animated.View style={[styles.radioDot, { backgroundColor: colors.primary }, dotStyle]} />
-        </View>
-      </Animated.View>
-    </PressableScale>
-  );
-};
 
 const styles = StyleSheet.create({
   content: {
@@ -371,10 +456,6 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     marginBottom: spacing.md,
   },
-  thematic: {
-    letterSpacing: 0.8,
-    marginBottom: spacing.xs,
-  },
   cardTitle: {
     lineHeight: 22,
     marginBottom: spacing.xs,
@@ -382,6 +463,11 @@ const styles = StyleSheet.create({
   cardDescription: {
     lineHeight: 19,
     marginBottom: spacing.lg,
+  },
+  votedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
   },
   empty: {
     alignItems: 'center',
@@ -410,7 +496,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: spacing.lg,
+    marginBottom: spacing.sm,
   },
   close: {
     width: 34,
@@ -420,7 +506,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   sheetQuestion: {
-    lineHeight: 22,
+    lineHeight: 19,
     marginBottom: spacing.lg,
   },
   options: {
@@ -437,22 +523,29 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
   },
   radio: {
-    width: 22,
-    height: 22,
+    width: 20,
+    height: 20,
     borderRadius: borderRadius.full,
     borderWidth: 2,
     justifyContent: 'center',
     alignItems: 'center',
   },
   radioDot: {
-    width: 11,
-    height: 11,
+    width: 10,
+    height: 10,
     borderRadius: borderRadius.full,
   },
-  notice: {
+  secretRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     gap: spacing.sm,
     marginBottom: spacing.lg,
+  },
+  results: {
+    gap: spacing.lg,
+  },
+  resultsLoading: {
+    paddingVertical: spacing.xxl,
+    alignItems: 'center',
   },
 });

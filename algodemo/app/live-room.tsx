@@ -1,14 +1,17 @@
-import React, { useState, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   StyleSheet,
   View,
   Text,
   ScrollView,
+  ActivityIndicator,
   TextInput,
   KeyboardAvoidingView,
   Platform,
+  Pressable,
+  Alert,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -17,6 +20,11 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated from 'react-native-reanimated';
 import { StatusBar } from 'expo-status-bar';
 import { useAccessibility } from '../hooks/useAccessibility';
+import {
+  useLiveDebat,
+  type LiveAffirmation,
+  type LiveMessage,
+} from '../hooks/useLiveDebat';
 import { useAuthStore } from '../stores/authStore';
 import { PressableScale } from '../components/ui/PressableScale';
 import { Button } from '../components/ui/Button';
@@ -24,6 +32,8 @@ import { SectionHeader } from '../components/ui/SectionHeader';
 import { LiveDot } from '../components/ui/LiveDot';
 import { ProgressBar } from '../components/feature/participation/ProgressBar';
 import { enterListItem, enterFade } from '../components/ui/motion';
+import { getDebate, type DebateDetail } from '../services/api/debats';
+import { THEMATICS } from '../constants/thematics';
 import {
   spacing,
   typography,
@@ -32,101 +42,181 @@ import {
   motion,
   scrimGradient,
   scrimLocations,
+  thematicGradients,
   withAlpha,
 } from '../constants/theme';
 
 const BLURHASH = 'L6Pj0^jE.AyE_3t7t7R**0o#DgR4';
 
-interface ChatMessage {
-  id: string;
-  author: string;
-  initials?: string;
-  isCertified?: boolean;
-  isSelf?: boolean;
-  time: string;
-  text: string;
-}
+/** Jeton de couleur local de la thématique du débat (repli : politique). */
+const thematicTokenFor = (debate: DebateDetail | null) =>
+  THEMATICS.find((thematic) => thematic.id === debate?.thematicId)?.colorToken ??
+  'politique';
 
-const POLL_OPTIONS = [
-  { id: 'opt1', label: 'Oui, tout à fait', votes: 52 },
-  { id: 'opt2', label: "Non, c'est utopique", votes: 28 },
-  { id: 'opt3', label: 'Mitigé / autre solution', votes: 20 },
-];
+const formatViewers = (viewers: number) =>
+  viewers >= 1000
+    ? `${(viewers / 1000).toFixed(1).replace('.', ',')} k`
+    : String(viewers);
 
-// TODO(backend) : flux temps réel (WebSocket) des messages modérés.
-const INITIAL_CHAT: ChatMessage[] = [
-  {
-    id: 'msg_1',
-    author: 'Jean Dupont',
-    initials: 'JD',
-    time: '14:22',
-    text: "C'est une excellente initiative pour le centre-ville !",
-  },
-  {
-    id: 'msg_2',
-    author: 'Dr. Amani Koné',
-    isCertified: true,
-    time: '14:25',
-    text: "Nous avons des données qui confirment l'impact positif sur le commerce local.",
-  },
-  {
-    id: 'msg_3',
-    author: 'Lucie Martin',
-    initials: 'LM',
-    time: '14:27',
-    text: 'Quid des zones périphériques moins bien desservies ?',
-  },
-];
+const formatDateLongue = (iso: string) =>
+  new Date(iso).toLocaleDateString('fr-FR', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  });
+
+const formatHeure = (iso: string) =>
+  new Date(iso).toLocaleTimeString('fr-FR', {
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+
+/** « Awa Diallo » → « AD » — l'avatar textuel des autres participants. */
+const initialesDe = (auteur: string) =>
+  auteur
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((mot) => mot[0].toUpperCase())
+    .join('');
 
 export default function LiveRoomScreen() {
   const router = useRouter();
   const { t } = useTranslation();
   const { colors, getFontSize } = useAccessibility();
-  const { user } = useAuthStore();
   const insets = useSafeAreaInsets();
+  const { id } = useLocalSearchParams<{ id?: string }>();
+
+  // Fiche du débat (titre, couverture, thématique) : REST public — la salle
+  // temps réel (participants, affirmations, votes) vit dans le hook socket.
+  const [debate, setDebate] = useState<DebateDetail | null>(null);
+  const [loadFailed, setLoadFailed] = useState(false);
+  const {
+    state,
+    participants,
+    affirmations,
+    messages,
+    myVotes,
+    isStaff,
+    vote,
+    sendMessage,
+    deleteMessage,
+    report,
+  } = useLiveDebat(id);
+
+  const { user } = useAuthStore();
+  const [draft, setDraft] = useState('');
   const scrollRef = useRef<ScrollView>(null);
 
-  // L'avatar de l'utilisateur est lu depuis la session à chaque rendu plutôt
-  // que figé dans le message : changer sa photo met ainsi à jour toutes ses
-  // interventions déjà envoyées, et pas seulement les suivantes.
+  // L'avatar est lu depuis la session à chaque rendu plutôt que figé dans le
+  // message : changer sa photo met à jour toutes ses interventions.
   const selfInitials = user ? `${user.firstName[0]}${user.lastName[0]}` : 'VS';
 
-  const [messages, setMessages] = useState(INITIAL_CHAT);
-  const [draft, setDraft] = useState('');
-  const [choice, setChoice] = useState<string | null>(null);
-  const [hasVoted, setHasVoted] = useState(false);
-  const [poll, setPoll] = useState(POLL_OPTIONS);
-
-  const totalVotes = poll.reduce((sum, option) => sum + option.votes, 0);
-
-  const submitVote = () => {
-    if (!choice || hasVoted) return;
-    setPoll((current) =>
-      current.map((option) =>
-        option.id === choice ? { ...option, votes: option.votes + 1 } : option
-      )
+  // Le fil suit la conversation : nouveau message → on vise le bas, une fois
+  // la liste recomposée.
+  useEffect(() => {
+    if (messages.length === 0) return;
+    const timer = setTimeout(
+      () => scrollRef.current?.scrollToEnd({ animated: true }),
+      60
     );
-    setHasVoted(true);
+    return () => clearTimeout(timer);
+  }, [messages.length]);
+
+  const envoyer = () => {
+    const texte = draft.trim();
+    if (!texte) return;
+    sendMessage(texte);
+    setDraft('');
   };
 
-  const sendMessage = () => {
-    const text = draft.trim();
-    if (!text) return;
-
-    setMessages((current) => [
-      ...current,
+  const confirmerSuppression = (message: LiveMessage) => {
+    if (!isStaff) return;
+    Alert.alert(t('liveRoom.deleteTitle'), t('liveRoom.deleteBody'), [
+      { text: t('liveRoom.deleteCancel'), style: 'cancel' },
       {
-        id: `msg_${Date.now()}`,
-        author: t('liveRoom.you'),
-        isSelf: true,
-        time: "À l'instant",
-        text,
+        text: t('liveRoom.deleteConfirm'),
+        style: 'destructive',
+        onPress: () => deleteMessage(message.id),
       },
     ]);
-    setDraft('');
-    // Laisse la liste se recomposer avant de viser le bas.
-    setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 60);
   };
+
+  // Motifs prédéfinis : un signalement en deux gestes pendant le direct,
+  // sans clavier — le staff le reçoit instantanément (console web comprise).
+  const signalerDirect = () => {
+    if (state !== 'joined') {
+      Alert.alert(t('liveRoom.reportLive'), t('liveRoom.reportNeedsRoom'));
+      return;
+    }
+    const envoyer = (motif: string) => {
+      report(motif);
+      Alert.alert(t('liveRoom.reportLive'), t('liveRoom.reportSent'));
+    };
+    Alert.alert(t('liveRoom.reportLive'), t('liveRoom.reportBody'), [
+      { text: t('liveRoom.reportCancel'), style: 'cancel' },
+      {
+        text: t('liveRoom.reportFalseInfo'),
+        onPress: () => envoyer(t('liveRoom.reportFalseInfo')),
+      },
+      {
+        text: t('liveRoom.reportInappropriate'),
+        onPress: () => envoyer(t('liveRoom.reportInappropriate')),
+      },
+    ]);
+  };
+
+  useEffect(() => {
+    if (!id) {
+      setLoadFailed(true);
+      return;
+    }
+    let cancelled = false;
+    getDebate(id)
+      .then((detail) => {
+        if (!cancelled) setDebate(detail);
+      })
+      .catch(() => {
+        if (!cancelled) setLoadFailed(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [id]);
+
+  const thematicToken = thematicTokenFor(debate);
+  const thematicColor = colors.thematic[thematicToken];
+  const isEnded = state === 'ended' || debate?.status === 'ended';
+
+  // ─── Débat introuvable : sortie propre, sans écran cassé ────────────
+  if (loadFailed) {
+    return (
+      <View style={[styles.container, styles.centered, { backgroundColor: colors.background }]}>
+        <StatusBar style="light" />
+        <Ionicons name="cloud-offline-outline" size={30} color={colors.textTertiary} />
+        <Text
+          style={{
+            color: colors.textSecondary,
+            fontSize: getFontSize(typography.sizes.bodySmall),
+            fontFamily: typography.families.body,
+            textAlign: 'center',
+            marginTop: spacing.md,
+            marginBottom: spacing.xl,
+            paddingHorizontal: spacing.xxl,
+            lineHeight: 20,
+          }}
+        >
+          {t('liveRoom.notFound')}
+        </Text>
+        <Button
+          label={t('liveRoom.backToDebates')}
+          onPress={() => router.back()}
+          variant="outline"
+          haptic="light"
+        />
+      </View>
+    );
+  }
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -135,490 +225,667 @@ export default function LiveRoomScreen() {
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.flex}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
       >
         <ScrollView
           ref={scrollRef}
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.scroll}
+          contentContainerStyle={[
+            styles.scroll,
+            { paddingBottom: Math.max(insets.bottom, spacing.lg) },
+          ]}
           keyboardShouldPersistTaps="handled"
         >
-          {/* ─── Lecteur ───────────────────────────────────────────── */}
-          <View style={styles.player}>
+        {/* ─── Lecteur ───────────────────────────────────────────── */}
+        <View style={styles.player}>
+          {debate?.coverUrl ? (
             <Image
-              source={{
-                uri: 'https://images.unsplash.com/photo-1517048676732-d65bc937f952?q=80&w=1000',
-              }}
+              source={{ uri: debate.coverUrl }}
               placeholder={{ blurhash: BLURHASH }}
               contentFit="cover"
               transition={240}
               style={StyleSheet.absoluteFill}
             />
+          ) : (
             <LinearGradient
-              colors={scrimGradient}
-              locations={scrimLocations}
+              colors={thematicGradients[thematicToken]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
               style={StyleSheet.absoluteFill}
             />
+          )}
+          <LinearGradient
+            colors={scrimGradient}
+            locations={scrimLocations}
+            style={StyleSheet.absoluteFill}
+          />
 
-            <View style={[styles.playerTop, { paddingTop: insets.top + spacing.sm }]}>
-              <PressableScale
-                onPress={() => router.back()}
-                scaleTo={motion.scale.chip}
-                accessibilityRole="button"
-                accessibilityLabel={t('liveRoom.back')}
-                style={[styles.playerButton, { backgroundColor: withAlpha('#000000', 0.42) }]}
-              >
-                <Ionicons name="arrow-back" size={20} color="#FFFFFF" />
-              </PressableScale>
+          <View style={[styles.playerTop, { paddingTop: insets.top + spacing.sm }]}>
+            <PressableScale
+              onPress={() => router.back()}
+              scaleTo={motion.scale.chip}
+              accessibilityRole="button"
+              accessibilityLabel={t('liveRoom.back')}
+              style={[styles.playerButton, { backgroundColor: withAlpha('#000000', 0.42) }]}
+            >
+              <Ionicons name="arrow-back" size={20} color="#FFFFFF" />
+            </PressableScale>
 
-              <LiveDot label={t('liveRoom.live')} variant="overlay" />
+            {!isEnded && <LiveDot label={t('liveRoom.live')} variant="overlay" />}
 
-              <PressableScale
-                onPress={() => {
-                  /* TODO(backend) : signalement d'un direct en cours */
-                }}
-                scaleTo={motion.scale.chip}
-                accessibilityRole="button"
-                accessibilityLabel={t('liveRoom.reportLive')}
-                style={[styles.playerButton, { backgroundColor: withAlpha('#000000', 0.42) }]}
-              >
-                <Ionicons name="flag-outline" size={18} color="#FFFFFF" />
-              </PressableScale>
-            </View>
+            <PressableScale
+              onPress={signalerDirect}
+              scaleTo={motion.scale.chip}
+              haptic="light"
+              accessibilityRole="button"
+              accessibilityLabel={t('liveRoom.reportLive')}
+              style={[styles.playerButton, { backgroundColor: withAlpha('#000000', 0.42) }]}
+            >
+              <Ionicons name="flag-outline" size={18} color="#FFFFFF" />
+            </PressableScale>
+          </View>
 
-            <View style={styles.playCenter} pointerEvents="box-none">
-              <PressableScale
-                onPress={() => {
-                  /* TODO(backend) : lecture du flux vidéo adaptatif (RG-FEED-07) */
-                }}
-                haptic="medium"
-                scaleTo={0.9}
-                accessibilityRole="button"
-                accessibilityLabel={t('debats.join')}
-                style={styles.playButton}
-              >
-                <Ionicons name="play" size={26} color="#0C100A" style={styles.playIcon} />
-              </PressableScale>
-            </View>
+          <View style={styles.playCenter} pointerEvents="box-none">
+            <PressableScale
+              onPress={() => {
+                /* TODO(livekit) : lecture du flux vidéo — nécessite un build de
+                   développement, LiveKit n'entre pas dans Expo Go. */
+              }}
+              haptic="medium"
+              scaleTo={0.9}
+              accessibilityRole="button"
+              accessibilityLabel={t('debats.join')}
+              style={styles.playButton}
+            >
+              <Ionicons name="play" size={26} color="#0C100A" style={styles.playIcon} />
+            </PressableScale>
+          </View>
 
-            <View style={styles.playerBottom}>
-              <Text
-                numberOfLines={2}
-                style={[
-                  styles.playerTitle,
-                  {
-                    fontSize: getFontSize(typography.sizes.h4),
-                    fontFamily: typography.families.heading,
-                  },
-                ]}
-              >
-                Le futur de la mobilité urbaine : débat public
-              </Text>
+          <View style={styles.playerBottom}>
+            <Text
+              numberOfLines={2}
+              style={[
+                styles.playerTitle,
+                {
+                  fontSize: getFontSize(typography.sizes.h4),
+                  fontFamily: typography.families.heading,
+                },
+              ]}
+            >
+              {debate?.title ?? ''}
+            </Text>
 
-              <View style={styles.playerStats}>
+            <View style={styles.playerStats}>
+              {participants !== null && (
                 <View style={styles.playerStat}>
                   <Ionicons name="eye-outline" size={13} color="rgba(255,255,255,0.85)" />
                   <Text style={styles.playerStatText}>
-                    {t('debats.viewers', { value: '1,2 k' })}
+                    {t('debats.viewers', { value: formatViewers(participants) })}
                   </Text>
                 </View>
+              )}
+              {debate && (
                 <View style={styles.playerStat}>
-                  <Ionicons name="time-outline" size={13} color="rgba(255,255,255,0.85)" />
-                  <Text style={styles.playerStatText}>42:15</Text>
+                  <Ionicons name="calendar-outline" size={13} color="rgba(255,255,255,0.85)" />
+                  <Text style={styles.playerStatText}>
+                    {formatDateLongue(debate.startsAt)}
+                  </Text>
                 </View>
-              </View>
+              )}
             </View>
           </View>
+        </View>
 
-          <View style={styles.body}>
-            {/* ─── Intervenants ────────────────────────────────────── */}
+        <View style={styles.body}>
+          {/* ─── Direct clôturé pendant qu'on y était ────────────── */}
+          {isEnded && (
             <Animated.View
-              entering={enterListItem(0)}
+              entering={enterFade()}
               style={[styles.card, { backgroundColor: colors.surface }, shadows.md]}
             >
-              <View style={styles.moderatorRow}>
-                <Image
-                  source={{
-                    uri: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?q=80&w=200',
-                  }}
-                  placeholder={{ blurhash: BLURHASH }}
-                  contentFit="cover"
-                  transition={200}
-                  style={styles.moderatorAvatar}
+              <View style={styles.endedRow}>
+                <MaterialCommunityIcons
+                  name="flag-checkered"
+                  size={20}
+                  color={colors.primary}
                 />
-                <View style={styles.moderatorInfo}>
+                <Text
+                  style={{
+                    flex: 1,
+                    color: colors.textPrimary,
+                    fontSize: getFontSize(typography.sizes.body),
+                    fontFamily: typography.families.headingSemiBold,
+                  }}
+                >
+                  {t('liveRoom.endedTitle')}
+                </Text>
+              </View>
+              <Text
+                style={{
+                  color: colors.textSecondary,
+                  fontSize: getFontSize(typography.sizes.bodySmall),
+                  fontFamily: typography.families.body,
+                  lineHeight: 19,
+                  marginTop: spacing.sm,
+                  marginBottom: spacing.lg,
+                }}
+              >
+                {t('liveRoom.endedBody')}
+              </Text>
+              <Button
+                label={t('liveRoom.backToDebates')}
+                onPress={() => router.back()}
+                variant="outline"
+                haptic="light"
+              />
+            </Animated.View>
+          )}
+
+          {/* ─── À propos ────────────────────────────────────────── */}
+          <Animated.View
+            entering={enterListItem(0)}
+            style={[styles.card, { backgroundColor: colors.surface }, shadows.md]}
+          >
+            <Text
+              style={{
+                color: colors.textTertiary,
+                fontSize: getFontSize(typography.sizes.micro),
+                fontFamily: typography.families.bodyBold,
+                letterSpacing: 0.8,
+              }}
+            >
+              {t('liveRoom.about').toUpperCase()}
+            </Text>
+
+            {debate?.thematicLabel && (
+              <View style={styles.thematicRow}>
+                <View style={[styles.thematicDot, { backgroundColor: thematicColor }]} />
+                <Text
+                  style={{
+                    color: colors.textPrimary,
+                    fontSize: getFontSize(typography.sizes.bodySmall),
+                    fontFamily: typography.families.bodyBold,
+                  }}
+                >
+                  {debate.thematicLabel}
+                </Text>
+              </View>
+            )}
+
+            {debate?.description ? (
+              <Text
+                style={{
+                  color: colors.textSecondary,
+                  fontSize: getFontSize(typography.sizes.bodySmall),
+                  fontFamily: typography.families.body,
+                  lineHeight: 20,
+                  marginTop: spacing.sm,
+                }}
+              >
+                {debate.description}
+              </Text>
+            ) : null}
+
+            {debate && (
+              <Text
+                style={{
+                  color: colors.textTertiary,
+                  fontSize: getFontSize(typography.sizes.micro),
+                  fontFamily: typography.families.body,
+                  marginTop: spacing.md,
+                }}
+              >
+                {t('liveRoom.startedOn', { date: formatDateLongue(debate.startsAt) })}
+              </Text>
+            )}
+          </Animated.View>
+
+          {/* ─── Affirmations au vote ────────────────────────────── */}
+          <Animated.View
+            entering={enterListItem(1)}
+            style={[styles.card, { backgroundColor: colors.secondaryPale }, shadows.sm]}
+          >
+            <View style={styles.pollHeader}>
+              <MaterialCommunityIcons name="poll" size={18} color={colors.secondary} />
+              <Text
+                style={{
+                  color: colors.secondary,
+                  fontSize: getFontSize(typography.sizes.caption),
+                  fontFamily: typography.families.bodyBold,
+                  letterSpacing: 0.6,
+                }}
+              >
+                {t('liveRoom.affirmations').toUpperCase()}
+              </Text>
+            </View>
+
+            {state === 'connecting' && (
+              <View style={styles.roomStateBlock}>
+                <ActivityIndicator size="small" color={colors.secondary} />
+                <Text
+                  style={[
+                    styles.roomStateText,
+                    {
+                      color: colors.textSecondary,
+                      fontSize: getFontSize(typography.sizes.bodySmall),
+                      fontFamily: typography.families.body,
+                    },
+                  ]}
+                >
+                  {t('liveRoom.joining')}
+                </Text>
+              </View>
+            )}
+
+            {state === 'signed-out' && (
+              <View style={styles.roomStateBlock}>
+                <Text
+                  style={[
+                    styles.roomStateText,
+                    {
+                      color: colors.textSecondary,
+                      fontSize: getFontSize(typography.sizes.bodySmall),
+                      fontFamily: typography.families.body,
+                    },
+                  ]}
+                >
+                  {t('liveRoom.signedOut')}
+                </Text>
+                <Button
+                  label={t('liveRoom.signIn')}
+                  onPress={() => router.push('/login')}
+                  variant="secondary"
+                  size="sm"
+                  haptic="light"
+                />
+              </View>
+            )}
+
+            {state === 'error' && (
+              <Text
+                style={[
+                  styles.roomStateText,
+                  {
+                    color: colors.textSecondary,
+                    fontSize: getFontSize(typography.sizes.bodySmall),
+                    fontFamily: typography.families.body,
+                  },
+                ]}
+              >
+                {t('liveRoom.joinError')}
+              </Text>
+            )}
+
+            {(state === 'joined' || state === 'ended') &&
+              affirmations.length === 0 && (
+                <Text
+                  style={[
+                    styles.roomStateText,
+                    {
+                      color: colors.textSecondary,
+                      fontSize: getFontSize(typography.sizes.bodySmall),
+                      fontFamily: typography.families.body,
+                    },
+                  ]}
+                >
+                  {t('liveRoom.affirmationsEmpty')}
+                </Text>
+              )}
+
+            {affirmations.map((affirmation, index) => (
+              <View key={affirmation.id}>
+                {index > 0 && (
+                  <View style={[styles.divider, { backgroundColor: colors.borderLight }]} />
+                )}
+                <AffirmationBlock
+                  affirmation={affirmation}
+                  myVote={myVotes[affirmation.id]}
+                  onVote={vote}
+                  disabled={isEnded}
+                />
+              </View>
+            ))}
+          </Animated.View>
+
+          {/* ─── Fil de discussion ───────────────────────────────── */}
+          {(state === 'joined' || state === 'ended') && (
+            <>
+              <Animated.View entering={enterListItem(2)}>
+                <SectionHeader
+                  title={t('liveRoom.chatTitle')}
+                  overline={t('liveRoom.messageCount', { count: messages.length })}
+                  style={styles.chatHeader}
+                />
+              </Animated.View>
+
+              <View style={styles.chat}>
+                {messages.length === 0 && (
                   <Text
                     style={{
                       color: colors.textTertiary,
-                      fontSize: getFontSize(typography.sizes.micro),
-                      fontFamily: typography.families.bodyBold,
-                      letterSpacing: 0.8,
+                      fontSize: getFontSize(typography.sizes.bodySmall),
+                      fontFamily: typography.families.body,
+                      textAlign: 'center',
+                      paddingVertical: spacing.md,
+                      lineHeight: 19,
                     }}
                   >
-                    {t('liveRoom.moderator').toUpperCase()}
+                    {t('liveRoom.chatEmpty')}
                   </Text>
-                  <View style={styles.moderatorNameRow}>
-                    <Text
-                      style={{
-                        color: colors.textPrimary,
-                        fontSize: getFontSize(typography.sizes.bodySmall),
-                        fontFamily: typography.families.bodyBold,
-                      }}
-                    >
-                      Marie Vallet
-                    </Text>
-                    <MaterialCommunityIcons
-                      name="check-decagram"
-                      size={16}
-                      color={colors.verified}
-                    />
-                  </View>
-                </View>
-              </View>
+                )}
 
-              <View style={[styles.divider, { backgroundColor: colors.borderLight }]} />
-
-              <Text
-                style={[
-                  styles.speakersLabel,
-                  {
-                    color: colors.textTertiary,
-                    fontSize: getFontSize(typography.sizes.micro),
-                    fontFamily: typography.families.bodyBold,
-                  },
-                ]}
-              >
-                {t('liveRoom.certifiedSpeakers').toUpperCase()}
-              </Text>
-
-              <View style={styles.speakersRow}>
-                <View style={styles.stack}>
-                  {[
-                    'https://images.unsplash.com/photo-1560250097-0b93528c311a?q=80&w=160',
-                    'https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=160',
-                    'https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?q=80&w=160',
-                  ].map((uri, index) => (
-                    <Image
-                      key={uri}
-                      source={{ uri }}
-                      placeholder={{ blurhash: BLURHASH }}
-                      contentFit="cover"
-                      style={[
-                        styles.stackAvatar,
-                        { borderColor: colors.surface, marginLeft: index === 0 ? 0 : -12 },
-                      ]}
-                    />
-                  ))}
-                </View>
-
-                <View style={[styles.moreBadge, { backgroundColor: colors.primaryPale }]}>
-                  <Text
-                    style={{
-                      color: colors.primary,
-                      fontSize: getFontSize(typography.sizes.caption),
-                      fontFamily: typography.families.bodyBold,
-                    }}
+                {messages.map((message, index) => (
+                  <Animated.View
+                    key={message.id}
+                    entering={enterListItem(Math.min(index, 6))}
                   >
-                    +2
-                  </Text>
-                </View>
-              </View>
-            </Animated.View>
-
-            {/* ─── Sondage en direct ───────────────────────────────── */}
-            <Animated.View
-              entering={enterListItem(1)}
-              style={[styles.card, { backgroundColor: colors.secondaryPale }, shadows.sm]}
-            >
-              <View style={styles.pollHeader}>
-                <MaterialCommunityIcons name="poll" size={18} color={colors.secondary} />
-                <Text
-                  style={{
-                    color: colors.secondary,
-                    fontSize: getFontSize(typography.sizes.caption),
-                    fontFamily: typography.families.bodyBold,
-                    letterSpacing: 0.6,
-                  }}
-                >
-                  {t('liveRoom.livePoll').toUpperCase()}
-                </Text>
-              </View>
-
-              <Text
-                style={[
-                  styles.pollQuestion,
-                  {
-                    color: colors.textPrimary,
-                    fontSize: getFontSize(typography.sizes.bodySmall),
-                    fontFamily: typography.families.bodySemiBold,
-                  },
-                ]}
-              >
-                Faut-il prioriser les transports en commun gratuits au détriment du
-                stationnement automobile ?
-              </Text>
-
-              {!hasVoted ? (
-                <View style={styles.pollOptions}>
-                  {poll.map((option) => {
-                    const isSelected = choice === option.id;
-                    return (
-                      <PressableScale
-                        key={option.id}
-                        onPress={() => setChoice(option.id)}
-                        scaleTo={0.985}
-                        accessibilityRole="radio"
-                        accessibilityState={{ selected: isSelected }}
-                        accessibilityLabel={option.label}
-                        style={[
-                          styles.pollOption,
-                          {
-                            backgroundColor: colors.surface,
-                            borderColor: isSelected ? colors.secondary : 'transparent',
-                          },
-                        ]}
-                      >
-                        <Text
-                          style={{
-                            flex: 1,
-                            color: colors.textPrimary,
-                            fontSize: getFontSize(typography.sizes.bodySmall),
-                            fontFamily: isSelected
-                              ? typography.families.bodySemiBold
-                              : typography.families.body,
-                          }}
-                        >
-                          {option.label}
-                        </Text>
-                        <View
-                          style={[
-                            styles.radio,
-                            { borderColor: isSelected ? colors.secondary : colors.border },
-                          ]}
-                        >
-                          {isSelected && (
-                            <View
-                              style={[styles.radioDot, { backgroundColor: colors.secondary }]}
-                            />
-                          )}
-                        </View>
-                      </PressableScale>
-                    );
-                  })}
-
-                  <Button
-                    label={t('liveRoom.vote')}
-                    onPress={submitVote}
-                    disabled={!choice}
-                    variant="secondary"
-                    haptic="success"
-                    style={styles.pollButton}
-                  />
-                </View>
-              ) : (
-                <Animated.View entering={enterFade()} style={styles.pollResults}>
-                  {poll.map((option, index) => (
-                    <ProgressBar
-                      key={option.id}
-                      value={Math.round((option.votes / totalVotes) * 100)}
-                      label={option.label}
-                      color={colors.secondary}
-                      delay={index * 120}
-                    />
-                  ))}
-                  <View style={styles.votedRow}>
-                    <Ionicons name="checkmark-circle" size={16} color={colors.success} />
-                    <Text
-                      style={{
-                        color: colors.success,
-                        fontSize: getFontSize(typography.sizes.caption),
-                        fontFamily: typography.families.bodySemiBold,
-                      }}
-                    >
-                      {t('liveRoom.voted')}
-                    </Text>
-                  </View>
-                </Animated.View>
-              )}
-            </Animated.View>
-
-            {/* ─── Fil de discussion ───────────────────────────────── */}
-            <Animated.View entering={enterListItem(2)}>
-              <SectionHeader
-                title={t('liveRoom.chatTitle')}
-                actionLabel={t('liveRoom.messageCount', { count: messages.length + 145 })}
-                onActionPress={() => {
-                  /* TODO(backend) : historique complet du fil modéré */
-                }}
-                style={styles.chatHeader}
-              />
-            </Animated.View>
-
-            <View style={styles.chat}>
-              {messages.map((message, index) => (
-                <Animated.View
-                  key={message.id}
-                  entering={enterListItem(Math.min(index, 6))}
-                  style={[
-                    styles.message,
-                    message.isCertified && {
-                      backgroundColor: withAlpha(colors.success, 0.08),
-                    },
-                    message.isSelf && { backgroundColor: withAlpha(colors.primary, 0.06) },
-                  ]}
-                >
-                  {message.isSelf && user?.avatarUri ? (
-                    <Image
-                      source={{ uri: user.avatarUri }}
-                      placeholder={{ blurhash: BLURHASH }}
-                      contentFit="cover"
-                      transition={200}
-                      style={styles.messageAvatar}
-                      accessibilityLabel={message.author}
-                    />
-                  ) : (
-                    <View
+                    <Pressable
+                      onLongPress={() => confirmerSuppression(message)}
+                      delayLongPress={450}
+                      disabled={!isStaff}
+                      accessibilityLabel={`${message.auteur} — ${message.texte}`}
                       style={[
-                        styles.messageAvatar,
-                        {
-                          backgroundColor: message.isCertified
-                            ? colors.success
-                            : message.isSelf
-                              ? colors.primary
-                              : colors.surfaceElevated,
+                        styles.message,
+                        message.certifie && {
+                          backgroundColor: withAlpha(colors.success, 0.08),
+                        },
+                        message.estMoi && {
+                          backgroundColor: withAlpha(colors.primary, 0.06),
                         },
                       ]}
                     >
-                      {message.isCertified ? (
-                        <Ionicons name="shield-checkmark" size={14} color="#FFFFFF" />
+                      {message.estMoi && user?.avatarUri ? (
+                        <Image
+                          source={{ uri: user.avatarUri }}
+                          placeholder={{ blurhash: BLURHASH }}
+                          contentFit="cover"
+                          transition={200}
+                          style={styles.messageAvatar}
+                          accessibilityLabel={message.auteur}
+                        />
                       ) : (
-                        <Text
-                          style={{
-                            color: message.isSelf ? '#FFFFFF' : colors.textSecondary,
-                            fontSize: getFontSize(typography.sizes.micro),
-                            fontFamily: typography.families.bodyBold,
-                          }}
-                        >
-                          {message.isSelf ? selfInitials : message.initials}
-                        </Text>
-                      )}
-                    </View>
-                  )}
-
-                  <View style={styles.messageBody}>
-                    <View style={styles.messageHeader}>
-                      <Text
-                        numberOfLines={1}
-                        style={{
-                          flexShrink: 1,
-                          color: message.isCertified ? colors.success : colors.textPrimary,
-                          fontSize: getFontSize(typography.sizes.caption),
-                          fontFamily: typography.families.bodyBold,
-                        }}
-                      >
-                        {message.author}
-                      </Text>
-                      {message.isCertified && (
                         <View
                           style={[
-                            styles.certifiedTag,
-                            { backgroundColor: withAlpha(colors.success, 0.16) },
+                            styles.messageAvatar,
+                            {
+                              backgroundColor: message.certifie
+                                ? colors.success
+                                : message.estMoi
+                                  ? colors.primary
+                                  : colors.surfaceElevated,
+                            },
                           ]}
                         >
+                          {message.certifie ? (
+                            <Ionicons name="shield-checkmark" size={14} color="#FFFFFF" />
+                          ) : (
+                            <Text
+                              style={{
+                                color: message.estMoi ? '#FFFFFF' : colors.textSecondary,
+                                fontSize: getFontSize(typography.sizes.micro),
+                                fontFamily: typography.families.bodyBold,
+                              }}
+                            >
+                              {message.estMoi ? selfInitials : initialesDe(message.auteur)}
+                            </Text>
+                          )}
+                        </View>
+                      )}
+
+                      <View style={styles.messageBody}>
+                        <View style={styles.messageHeader}>
                           <Text
+                            numberOfLines={1}
                             style={{
-                              color: colors.success,
-                              fontSize: getFontSize(typography.sizes.micro) - 1,
+                              flexShrink: 1,
+                              color: message.certifie ? colors.success : colors.textPrimary,
+                              fontSize: getFontSize(typography.sizes.caption),
                               fontFamily: typography.families.bodyBold,
                             }}
                           >
-                            {t('liveRoom.certified').toUpperCase()}
+                            {message.estMoi ? t('liveRoom.you') : message.auteur}
+                          </Text>
+                          {message.certifie && (
+                            <View
+                              style={[
+                                styles.certifiedTag,
+                                { backgroundColor: withAlpha(colors.success, 0.16) },
+                              ]}
+                            >
+                              <Text
+                                style={{
+                                  color: colors.success,
+                                  fontSize: getFontSize(typography.sizes.micro) - 1,
+                                  fontFamily: typography.families.bodyBold,
+                                }}
+                              >
+                                {t('liveRoom.certified').toUpperCase()}
+                              </Text>
+                            </View>
+                          )}
+                          <Text
+                            style={{
+                              marginLeft: 'auto',
+                              color: colors.textTertiary,
+                              fontSize: getFontSize(typography.sizes.micro),
+                              fontFamily: typography.families.body,
+                            }}
+                          >
+                            {formatHeure(message.creeLe)}
                           </Text>
                         </View>
-                      )}
-                      <Text
-                        style={{
-                          marginLeft: 'auto',
-                          color: colors.textTertiary,
-                          fontSize: getFontSize(typography.sizes.micro),
-                          fontFamily: typography.families.body,
-                        }}
-                      >
-                        {message.time}
-                      </Text>
-                    </View>
 
-                    <Text
-                      style={{
-                        color: colors.textPrimary,
-                        fontSize: getFontSize(typography.sizes.bodySmall),
-                        fontFamily: typography.families.body,
-                        lineHeight: 19,
-                      }}
-                    >
-                      {message.text}
-                    </Text>
-                  </View>
-                </Animated.View>
-              ))}
-            </View>
-          </View>
+                        <Text
+                          style={{
+                            color: colors.textPrimary,
+                            fontSize: getFontSize(typography.sizes.bodySmall),
+                            fontFamily: typography.families.body,
+                            lineHeight: 19,
+                          }}
+                        >
+                          {message.texte}
+                        </Text>
+                      </View>
+                    </Pressable>
+                  </Animated.View>
+                ))}
+              </View>
+            </>
+          )}
+        </View>
         </ScrollView>
 
         {/* ─── Saisie ──────────────────────────────────────────────── */}
-        <View
-          style={[
-            styles.composer,
-            {
-              backgroundColor: colors.background,
-              borderTopColor: colors.borderLight,
-              paddingBottom: Math.max(insets.bottom, spacing.md),
-            },
-          ]}
-        >
-          <View style={[styles.composerField, { backgroundColor: colors.surface }, shadows.sm]}>
-            <TextInput
-              placeholder={t('liveRoom.messagePlaceholder')}
-              placeholderTextColor={colors.textTertiary}
-              value={draft}
-              onChangeText={setDraft}
-              onSubmitEditing={sendMessage}
-              returnKeyType="send"
-              accessibilityLabel={t('liveRoom.messagePlaceholder')}
-              style={[
-                styles.composerInput,
-                {
-                  color: colors.textPrimary,
-                  fontSize: getFontSize(typography.sizes.bodySmall),
-                  fontFamily: typography.families.body,
-                },
-              ]}
-            />
-            <PressableScale
-              onPress={sendMessage}
-              disabled={!draft.trim()}
-              haptic="medium"
-              scaleTo={motion.scale.chip}
-              accessibilityRole="button"
-              accessibilityLabel={t('liveRoom.send')}
-              style={[
-                styles.sendButton,
-                {
-                  backgroundColor: draft.trim()
-                    ? colors.primary
-                    : withAlpha(colors.primary, 0.16),
-                },
-              ]}
-            >
-              <Ionicons
-                name="paper-plane"
-                size={16}
-                color={draft.trim() ? '#FFFFFF' : colors.textTertiary}
+        {state === 'joined' && !isEnded && (
+          <View
+            style={[
+              styles.composer,
+              {
+                backgroundColor: colors.background,
+                borderTopColor: colors.borderLight,
+                paddingBottom: Math.max(insets.bottom, spacing.md),
+              },
+            ]}
+          >
+            <View style={[styles.composerField, { backgroundColor: colors.surface }, shadows.sm]}>
+              <TextInput
+                placeholder={t('liveRoom.messagePlaceholder')}
+                placeholderTextColor={colors.textTertiary}
+                value={draft}
+                onChangeText={setDraft}
+                onSubmitEditing={envoyer}
+                returnKeyType="send"
+                maxLength={500}
+                accessibilityLabel={t('liveRoom.messagePlaceholder')}
+                style={[
+                  styles.composerInput,
+                  {
+                    color: colors.textPrimary,
+                    fontSize: getFontSize(typography.sizes.bodySmall),
+                    fontFamily: typography.families.body,
+                  },
+                ]}
               />
-            </PressableScale>
+              <PressableScale
+                onPress={envoyer}
+                disabled={!draft.trim()}
+                haptic="medium"
+                scaleTo={motion.scale.chip}
+                accessibilityRole="button"
+                accessibilityLabel={t('liveRoom.send')}
+                style={[
+                  styles.sendButton,
+                  {
+                    backgroundColor: draft.trim()
+                      ? colors.primary
+                      : withAlpha(colors.primary, 0.16),
+                  },
+                ]}
+              >
+                <Ionicons
+                  name="paper-plane"
+                  size={16}
+                  color={draft.trim() ? '#FFFFFF' : colors.textTertiary}
+                />
+              </PressableScale>
+            </View>
           </View>
-        </View>
+        )}
       </KeyboardAvoidingView>
+    </View>
+  );
+}
+
+/**
+ * Une affirmation soumise à la salle : « Valider / Invalider » tant qu'elle
+ * est ouverte (revoter est autorisé), résultats définitifs une fois fermée.
+ */
+function AffirmationBlock({
+  affirmation,
+  myVote,
+  onVote,
+  disabled,
+}: {
+  affirmation: LiveAffirmation;
+  myVote: boolean | undefined;
+  onVote: (affirmationId: string, valide: boolean) => void;
+  disabled: boolean;
+}) {
+  const { t } = useTranslation();
+  const { colors, getFontSize } = useAccessibility();
+
+  const total = affirmation.valides + affirmation.invalides;
+  const pctValides = total > 0 ? Math.round((affirmation.valides / total) * 100) : 0;
+  const isOpen = affirmation.statut === 'OUVERTE' && !disabled;
+
+  return (
+    <View>
+      <Text
+        style={[
+          styles.pollQuestion,
+          {
+            color: colors.textPrimary,
+            fontSize: getFontSize(typography.sizes.bodySmall),
+            fontFamily: typography.families.bodySemiBold,
+          },
+        ]}
+      >
+        {affirmation.texte}
+      </Text>
+
+      {isOpen ? (
+        <View style={styles.voteRow}>
+          {(
+            [
+              {
+                valide: true,
+                label: t('liveRoom.validate'),
+                icon: 'checkmark-circle' as const,
+                color: colors.success,
+                count: affirmation.valides,
+              },
+              {
+                valide: false,
+                label: t('liveRoom.invalidate'),
+                icon: 'close-circle' as const,
+                color: colors.error,
+                count: affirmation.invalides,
+              },
+            ] as const
+          ).map((option) => {
+            const isSelected = myVote === option.valide;
+            return (
+              <PressableScale
+                key={option.label}
+                onPress={() => onVote(affirmation.id, option.valide)}
+                scaleTo={0.97}
+                haptic="light"
+                accessibilityRole="radio"
+                accessibilityState={{ selected: isSelected }}
+                accessibilityLabel={`${option.label} — ${affirmation.texte}`}
+                style={[
+                  styles.voteOption,
+                  {
+                    backgroundColor: isSelected
+                      ? withAlpha(option.color, 0.12)
+                      : colors.surface,
+                    borderColor: isSelected ? option.color : 'transparent',
+                  },
+                ]}
+              >
+                <Ionicons name={option.icon} size={17} color={option.color} />
+                <Text
+                  style={{
+                    flex: 1,
+                    color: colors.textPrimary,
+                    fontSize: getFontSize(typography.sizes.caption),
+                    fontFamily: isSelected
+                      ? typography.families.bodyBold
+                      : typography.families.bodySemiBold,
+                  }}
+                >
+                  {option.label}
+                </Text>
+                <Text
+                  style={{
+                    color: colors.textTertiary,
+                    fontSize: getFontSize(typography.sizes.micro),
+                    fontFamily: typography.families.bodyBold,
+                  }}
+                >
+                  {option.count}
+                </Text>
+              </PressableScale>
+            );
+          })}
+        </View>
+      ) : (
+        <Animated.View entering={enterFade()} style={styles.pollResults}>
+          <ProgressBar
+            value={pctValides}
+            label={t('liveRoom.validate')}
+            color={colors.success}
+            delay={0}
+          />
+          <ProgressBar
+            value={total > 0 ? 100 - pctValides : 0}
+            label={t('liveRoom.invalidate')}
+            color={colors.error}
+            delay={120}
+          />
+          <View style={styles.closedRow}>
+            <Ionicons name="lock-closed" size={13} color={colors.textTertiary} />
+            <Text
+              style={{
+                color: colors.textTertiary,
+                fontSize: getFontSize(typography.sizes.micro),
+                fontFamily: typography.families.bodySemiBold,
+              }}
+            >
+              {t('liveRoom.closedVote')} · {t('liveRoom.votesCount', { count: total })}
+            </Text>
+          </View>
+        </Animated.View>
+      )}
     </View>
   );
 }
@@ -629,6 +896,10 @@ const styles = StyleSheet.create({
   },
   flex: {
     flex: 1,
+  },
+  centered: {
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   scroll: {
     paddingBottom: spacing.lg,
@@ -699,98 +970,67 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.xl,
     padding: spacing.lg,
   },
-  moderatorRow: {
+  endedRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.md,
+    gap: spacing.sm,
   },
-  moderatorAvatar: {
-    width: 46,
-    height: 46,
+  thematicRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginTop: spacing.md,
+  },
+  thematicDot: {
+    width: 10,
+    height: 10,
     borderRadius: borderRadius.full,
-  },
-  moderatorInfo: {
-    flex: 1,
-  },
-  moderatorNameRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    marginTop: 1,
   },
   divider: {
     height: 1,
     marginVertical: spacing.lg,
   },
-  speakersLabel: {
-    letterSpacing: 0.8,
-    marginBottom: spacing.md,
-  },
-  speakersRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  stack: {
-    flexDirection: 'row',
-  },
-  stackAvatar: {
-    width: 34,
-    height: 34,
-    borderRadius: borderRadius.full,
-    borderWidth: 2,
-  },
-  moreBadge: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: 5,
-    borderRadius: borderRadius.full,
-  },
   pollHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    marginBottom: spacing.sm,
+    marginBottom: spacing.md,
   },
   pollQuestion: {
     lineHeight: 21,
-    marginBottom: spacing.lg,
+    marginBottom: spacing.md,
   },
-  pollOptions: {
-    gap: spacing.sm,
-  },
-  pollOption: {
-    flexDirection: 'row',
+  roomStateBlock: {
     alignItems: 'center',
     gap: spacing.md,
+    paddingVertical: spacing.sm,
+  },
+  roomStateText: {
+    textAlign: 'center',
+    lineHeight: 19,
+  },
+  voteRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  voteOption: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
     borderWidth: 1.5,
     borderRadius: borderRadius.lg,
-    paddingHorizontal: spacing.lg,
+    paddingHorizontal: spacing.md,
     paddingVertical: spacing.md,
-  },
-  radio: {
-    width: 20,
-    height: 20,
-    borderRadius: borderRadius.full,
-    borderWidth: 2,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  radioDot: {
-    width: 10,
-    height: 10,
-    borderRadius: borderRadius.full,
-  },
-  pollButton: {
-    marginTop: spacing.sm,
   },
   pollResults: {
     gap: spacing.lg,
   },
-  votedRow: {
+  closedRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: spacing.sm,
+    gap: spacing.xs,
   },
   chatHeader: {
     marginTop: spacing.lg,

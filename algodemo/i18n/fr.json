@@ -95,7 +95,12 @@
       "resendIn": "Renvoyer le code dans {{seconds}} s",
       "resent": "Un nouveau code vient d'être envoyé.",
       "incomplete": "Saisissez les {{count}} chiffres du code.",
-      "changeDestination": "Modifier le destinataire"
+      "changeDestination": "Modifier le destinataire",
+      "loginTitle": "Confirmation de connexion",
+      "loginSubtitle": "Pour protéger votre compte, saisissez le code envoyé à",
+      "verifying": "Vérification…",
+      "sending": "Envoi du code…",
+      "verified": "C’est vous ! Connexion en cours…"
     }
   },
   "thematics": {
@@ -122,6 +127,17 @@
       "like": "J'aime ce contenu",
       "comment": "Voir les commentaires",
       "share": "Partager le contenu"
+    },
+    "comments": {
+      "title": "Commentaires",
+      "empty": "Soyez la première personne à commenter ce contenu.",
+      "placeholder": "Ajouter un commentaire…",
+      "send": "Envoyer le commentaire",
+      "like": "Aimer ce commentaire",
+      "reply": "Répondre",
+      "replyingTo": "Réponse à {{name}}",
+      "replyPlaceholder": "Répondre à {{name}}…",
+      "moderated": "Les commentaires respectent la charte citoyenne — les gestionnaires peuvent retirer un propos contraire."
     }
   },
   "debats": {
@@ -139,7 +155,17 @@
     "upcomingTitle": "Prochainement",
     "upcoming": "À venir",
     "openCalendar": "Ouvrir le calendrier",
-    "remindMe": "Me le rappeler"
+    "remindMe": "Me le rappeler",
+    "reminderSet": "Rappel prévu",
+    "reminderTitle": "C'est l'heure du débat",
+    "reminderBody": "« {{title}} » démarre — ouvrez AlgoDémo pour rejoindre le direct.",
+    "notifDenied": "Les notifications sont désactivées pour AlgoDémo. Autorisez-les dans les réglages du téléphone pour recevoir un rappel.",
+    "liveSection": "En direct",
+    "noLive": "Aucun direct en ce moment. Les prochains débats sont annoncés ci-dessous.",
+    "noUpcoming": "Aucun débat programmé pour le moment.",
+    "ended": "Débat terminé",
+    "loadError": "Impossible de charger les débats.",
+    "retry": "Réessayer"
   },
   "liveRoom": {
     "back": "Retour aux débats",
@@ -157,14 +183,42 @@
     "send": "Envoyer le message",
     "certified": "Certifié",
     "you": "Vous",
-    "reportLive": "Signaler ce direct"
+    "reportLive": "Signaler ce direct",
+    "reportBody": "Le staff du débat reçoit votre signalement immédiatement, pendant le direct.",
+    "reportFalseInfo": "Fausse information",
+    "reportInappropriate": "Propos inappropriés",
+    "reportCancel": "Annuler",
+    "reportSent": "Signalement transmis au staff. Merci de votre vigilance.",
+    "reportNeedsRoom": "Connectez-vous et rejoignez la salle pour signaler.",
+    "about": "À propos de ce débat",
+    "startedOn": "Débat du {{date}}",
+    "joining": "Connexion à la salle…",
+    "joinError": "Impossible de rejoindre la salle. Vérifiez votre connexion puis réessayez.",
+    "signedOut": "Connectez-vous pour prendre part au vote en direct.",
+    "signIn": "Se connecter",
+    "affirmations": "Affirmations au vote",
+    "affirmationsEmpty": "Le modérateur n'a pas encore soumis d'affirmation au vote de la salle.",
+    "validate": "Valider",
+    "invalidate": "Invalider",
+    "closedVote": "Vote clos",
+    "votesCount": "{{count}} votes",
+    "chatLocked": "Le fil s'ouvre quand vous avez rejoint la salle.",
+    "chatEmpty": "Aucun message pour l'instant — lancez la discussion.",
+    "deleteTitle": "Supprimer ce message ?",
+    "deleteBody": "Il sera retiré du fil pour toute la salle. Il reste tracé côté serveur.",
+    "deleteCancel": "Annuler",
+    "deleteConfirm": "Supprimer",
+    "endedTitle": "Ce direct est terminé",
+    "endedBody": "Merci de votre participation. Le résumé du débat sera publié dans le fil après validation.",
+    "backToDebates": "Retour aux débats",
+    "notFound": "Ce débat est introuvable ou n'est plus disponible."
   },
   "profile": {
     "memberSince": "Citoyen engagé depuis {{year}}",
     "editPhoto": "Changer la photo de profil",
     "openSettings": "Ouvrir les paramètres",
     "contributions": "Contributions",
-    "reliability": "Fiabilité",
+    "approvedOpinions": "Avis approuvés",
     "badgesTitle": "Mes badges",
     "seeAll": "Voir tout",
     "activityTitle": "Activité citoyenne",
@@ -187,9 +241,9 @@
       "locked": "À débloquer"
     },
     "activity": {
-      "votes": "Votes validés",
-      "watch": "Veille juridique",
-      "lives": "Présence aux lives"
+      "votes": "Votes déposés",
+      "reports": "Signalements",
+      "lives": "Lives rejoints"
     },
     "accessibility": {
       "fontSize": "Taille du texte",
@@ -229,20 +283,76 @@
       "devicePermissions": "Autorisations de l'appareil"
     }
   },
+  "parametres": {
+    "securite": {
+      "title": "Sécurité du compte",
+      "statusOn": "Double authentification activée",
+      "statusOff": "Double authentification désactivée",
+      "intro": "La double authentification (TOTP) ajoute un code à 6 chiffres, généré par une application comme Google Authenticator, à chaque connexion. Quand elle est active, elle remplace le code envoyé par email.",
+      "enable": "Activer la double authentification",
+      "setupTitle": "Enregistrez la clé",
+      "setupBody": "Ouvrez votre application d'authentification et scannez ou saisissez la clé ci-dessous, puis entrez le code à 6 chiffres qu'elle affiche.",
+      "openApp": "Ouvrir dans mon application",
+      "secretLabel": "Clé à saisir manuellement",
+      "codePlaceholder": "Code à 6 chiffres",
+      "confirm": "Confirmer l'activation",
+      "disableIntro": "Pour désactiver, entrez un code valide de votre application d'authentification.",
+      "disable": "Désactiver la double authentification",
+      "enabledDone": "C'est fait : un code TOTP sera exigé à chaque connexion.",
+      "disabledDone": "Double authentification désactivée — le code par email reprend le relais.",
+      "error": "Code invalide. Vérifiez le code et l'heure automatique de votre téléphone."
+    },
+    "notifications": {
+      "title": "Notifications",
+      "consentTitle": "Recevoir les notifications de la plateforme",
+      "consentDesc": "Démarrage des débats, publication des résultats de consultations, décisions de modération. Sans consentement, le serveur ne vous enverra rien (RGPD).",
+      "remindersTitle": "Rappels de débats",
+      "remindersDesc": "Les rappels « Me le rappeler » sont programmés sur votre téléphone et ne dépendent pas de ce consentement.",
+      "error": "Le réglage n'a pas pu être enregistré. Réessayez."
+    },
+    "anonymisation": {
+      "title": "Anonymisation",
+      "warningTitle": "Action irréversible",
+      "intro": "L'anonymisation détache définitivement votre identité de vos contributions (RG-USR-07) :",
+      "effet1": "Vos avis, commentaires et messages passés s'afficheront « Citoyen »",
+      "effet2": "Votre nom et votre email sont effacés du compte",
+      "effet3": "Vous êtes déconnecté de tous vos appareils",
+      "effet4": "Vos bulletins de vote restent secrets — ils l'ont toujours été",
+      "action": "Anonymiser mon compte",
+      "confirmTitle": "Anonymiser définitivement ?",
+      "confirmBody": "Cette action est irréversible. Vos contributions resteront visibles mais ne porteront plus jamais votre nom.",
+      "confirmCancel": "Annuler",
+      "confirmAction": "Anonymiser",
+      "error": "L'anonymisation a échoué. Réessayez."
+    }
+  },
   "ai": {
     "title": "Assistant IA",
-    "badge": "En réétude",
-    "subtitle": "Le module d'aide à la vérification est en cours de conception avec le comité scientifique.",
-    "notice": "Ce module est hors périmètre de la version 1. Il sera activé après validation du comité de pilotage.",
     "profileEntry": "Assistant IA",
-    "profileEntryDesc": "Aide à la vérification des faits — bientôt disponible",
-    "comingSoon": "Bientôt"
+    "profileEntryDesc": "Vérifiez une affirmation face aux données mesurées de la plateforme.",
+    "intro": "Collez une affirmation entendue dans un débat, un article ou un réseau social : l'assistant la confronte aux données mesurées et validées de la plateforme, sources à l'appui.",
+    "placeholder": "Ex. : « Le taux de participation des jeunes aux élections a augmenté »…",
+    "verify": "Vérifier",
+    "verifying": "Analyse des données…",
+    "signedOut": "Connectez-vous pour utiliser l'assistant.",
+    "error": "L'assistant n'a pas pu répondre. Vérifiez votre connexion puis réessayez.",
+    "verdicts": {
+      "COHERENT": "Cohérent avec nos données",
+      "CONTREDIT": "Contredit par nos données",
+      "NON_VERIFIABLE": "Non vérifiable avec nos données"
+    },
+    "elementsTitle": "Données utilisées",
+    "referencesTitle": "Références de la plateforme",
+    "sourceLabel": "Source : {{source}}",
+    "insightTitle": "Éclairage général",
+    "insightBadge": "Non vérifié par nos sources",
+    "disclaimer": "Le verdict s'appuie exclusivement sur les données et contenus validés par l'équipe — jamais un chiffre inventé. L'« éclairage général », lui, vient des connaissances du modèle d'IA : il aide à comprendre, mais n'est pas vérifié par nos sources."
   },
   "pays": {
     "tabLabel": "Fiche pays",
     "title": "Fiche pays",
     "updatedAt": "Dernière mise à jour : {{date}}",
-    "aiSynthesisLabel": "Synthèse générée par IA",
+    "aiSynthesisLabel": "Synthèse",
     "aiSynthesisNote": "Générée à partir de {{count}} sources analysées",
     "sources": "Voir les sources détaillées",
     "sourcePrefix": "Source",
@@ -269,6 +379,10 @@
       "closed": "Clôturé",
       "inProgress": "En cours",
       "resolved": "Résolu",
+      "received": "Reçu",
+      "rejected": "Rejeté",
+      "upcoming": "À venir",
+      "opensOn": "Ouvre le {{date}}",
       "closesOn": "Clôture le {{date}}",
       "daysLeft": "J-{{count}} avant clôture"
     },
@@ -291,9 +405,22 @@
       "participation": "Participation citoyenne",
       "quorum": "Objectif de quorum",
       "contributions": "Contributions",
-      "workshopsTitle": "Ateliers locaux",
-      "workshopsSubtitle": "Découvrez les rencontres près de chez vous.",
-      "empty": "Aucune consultation en cours."
+      "workshopsTitle": "Consultations citoyennes",
+      "workshopsSubtitle": "Votez à bulletin secret sur les questions qui vous concernent.",
+      "empty": "Aucune consultation en cours.",
+      "vote": "Voter",
+      "voteTitle": "Vote à bulletin secret",
+      "secretNotice": "L'émargement (qui a voté) et l'urne (ce qui a été voté) sont séparés : personne ne peut relier votre choix à votre identité.",
+      "submitVote": "Déposer mon bulletin",
+      "voteDone": "Bulletin déposé — merci pour votre participation.",
+      "alreadyVoted": "Bulletin déposé",
+      "seeResults": "Voir les résultats",
+      "resultsTitle": "Résultats",
+      "resultsPending": "Dépouillement non publié",
+      "totalVotes": "{{count}} bulletins",
+      "loginToVote": "Connectez-vous pour voter.",
+      "loadError": "Impossible de charger les consultations.",
+      "voteError": "Le vote n'a pas pu être enregistré. Réessayez."
     },
     "signalements": {
       "formTitle": "Nouveau signalement",
@@ -312,8 +439,16 @@
       "changePhoto": "Changer la photo",
       "removePhoto": "Retirer la photo",
       "submit": "Envoyer le signalement",
+      "sending": "Envoi en cours…",
       "missingFields": "Renseignez la catégorie, la description et la localisation.",
       "sent": "Signalement transmis à votre commune.",
+      "sendError": "L'envoi a échoué. Vérifiez votre connexion puis réessayez.",
+      "loginRequired": "Connectez-vous pour envoyer un signalement.",
+      "locationDenied": "Autorisez la localisation pour utiliser votre position.",
+      "locationError": "Position introuvable — saisissez l'adresse à la main.",
+      "myTitle": "Mes signalements",
+      "reportedAt": "Signalé à : {{address}}",
+      "loadError": "Impossible de charger les signalements récents.",
       "recentTitle": "Récents dans votre commune",
       "seeAll": "Tout voir",
       "empty": "Aucun signalement récent dans votre commune.",

@@ -1,5 +1,5 @@
 import React, { useRef, useState, useCallback } from 'react';
-import { StyleSheet, View, Text, TextInput, Pressable } from 'react-native';
+import { StyleSheet, TextInput, Pressable } from 'react-native';
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
@@ -44,6 +44,31 @@ export const OtpInput: React.FC<OtpInputProps> = ({
   const inputRef = useRef<TextInput>(null);
   const [isFocused, setIsFocused] = useState(false);
 
+  // ─── Secousse d'erreur ─────────────────────────────────────────────
+  // Toute la rangée tremble d'un coup sec — le refus se ressent avant même
+  // de lire le message, comme un hochement de tête négatif.
+  const shake = useSharedValue(0);
+  const wasError = useRef(false);
+
+  React.useEffect(() => {
+    if (error && !wasError.current) {
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      shake.value = withSequence(
+        withTiming(-10, { duration: 55 }),
+        withTiming(9, { duration: 55 }),
+        withTiming(-7, { duration: 50 }),
+        withTiming(5, { duration: 50 }),
+        withTiming(-2, { duration: 45 }),
+        withTiming(0, { duration: 45 })
+      );
+    }
+    wasError.current = error;
+  }, [error, shake]);
+
+  const rowStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: shake.value }],
+  }));
+
   const handleChange = useCallback(
     (raw: string) => {
       const digits = raw.replace(/[^0-9]/g, '').slice(0, length);
@@ -81,7 +106,7 @@ export const OtpInput: React.FC<OtpInputProps> = ({
         caretHidden
       />
 
-      <View style={styles.cells} pointerEvents="none">
+      <Animated.View style={[styles.cells, rowStyle]} pointerEvents="none">
         {Array.from({ length }).map((_, index) => (
           <OtpCell
             key={index}
@@ -92,7 +117,7 @@ export const OtpInput: React.FC<OtpInputProps> = ({
             fontSize={getFontSize(typography.sizes.h3)}
           />
         ))}
-      </View>
+      </Animated.View>
     </Pressable>
   );
 };
