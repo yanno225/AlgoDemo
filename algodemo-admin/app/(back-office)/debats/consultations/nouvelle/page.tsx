@@ -1,134 +1,178 @@
 import Link from "next/link";
-import { ArrowLeft, Rocket, Info, FileSearch, CalendarRange } from "lucide-react";
-import { Card, CardHeader } from "@/components/ui/Card";
-import { Field, TextInput, TextArea } from "@/components/ui/Field";
-import { ThematicPicker } from "@/components/ui/ThematicPicker";
+import { ArrowLeft, Info, Vote } from "lucide-react";
+import { creerConsultation } from "@/lib/data/debats-actions";
+import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/Button";
+import { Card, CardHeader } from "@/components/ui/Card";
+import { Field, TextArea, TextInput } from "@/components/ui/Field";
 
 export const metadata = { title: "Nouvelle consultation" };
 
-const SUMMARY_MAX = 600;
+/**
+ * Quatre champs d'option (deux obligatoires) : le cas nominal — Pour /
+ * Contre / Abstention — tient sans JavaScript ni liste dynamique.
+ */
+const OPTIONS = [
+  { name: "option-1", placeholder: "Pour", required: true },
+  { name: "option-2", placeholder: "Contre", required: true },
+  { name: "option-3", placeholder: "Abstention (facultatif)", required: false },
+  { name: "option-4", placeholder: "Autre option (facultatif)", required: false },
+];
 
 export default function NouvelleConsultationPage() {
   return (
     <>
       <Link
         href="/debats?onglet=consultations"
-        className="mb-4 inline-flex items-center gap-2 text-[14px] font-medium text-ink-muted transition-colors hover:text-primary"
+        className="mb-4 inline-flex items-center gap-2 text-[13px] font-medium text-ink-muted transition-colors hover:text-primary"
       >
-        <ArrowLeft className="size-4" aria-hidden />
+        <ArrowLeft className="size-3.5" aria-hidden />
         Retour aux consultations
       </Link>
 
-      <h1 className="mb-6 font-heading text-[28px] font-bold text-ink">
-        Nouvelle consultation
-      </h1>
+      <PageHeader
+        title="Nouvelle consultation"
+        description="Un vote citoyen à bulletin secret : personne — pas même l'administration — ne peut relier un votant à son choix."
+      />
 
-      {/* TODO(backend) : POST /admin/consultations */}
-      <form className="grid gap-5 lg:grid-cols-3">
-        <div className="space-y-5 lg:col-span-2">
-          <Card>
-            <CardHeader title="Objet de la consultation" />
+      <div className="grid items-start gap-5 lg:grid-cols-3">
+        <Card className="lg:col-span-2">
+          <form action={creerConsultation} className="space-y-5">
+            <Field
+              label="Type"
+              required
+              hint="Même vote à bulletin secret dans les deux cas — le sondage est une question rapide, affichée dans son propre onglet de l'application."
+            >
+              <div className="grid gap-2 sm:grid-cols-2">
+                <label className="flex cursor-pointer items-center gap-3 rounded-lg bg-surface-raised px-4 py-3 ring-1 ring-hairline transition-all has-[:checked]:bg-primary-pale has-[:checked]:ring-primary">
+                  <input
+                    type="radio"
+                    name="type"
+                    value="CONSULTATION"
+                    defaultChecked
+                    className="accent-[var(--color-primary)]"
+                  />
+                  <span>
+                    <span className="block text-[14px] font-semibold text-ink">
+                      Consultation
+                    </span>
+                    <span className="block text-[12px] text-ink-muted">
+                      Projet de loi ou texte vulgarisé
+                    </span>
+                  </span>
+                </label>
+                <label className="flex cursor-pointer items-center gap-3 rounded-lg bg-surface-raised px-4 py-3 ring-1 ring-hairline transition-all has-[:checked]:bg-primary-pale has-[:checked]:ring-primary">
+                  <input
+                    type="radio"
+                    name="type"
+                    value="SONDAGE"
+                    className="accent-[var(--color-primary)]"
+                  />
+                  <span>
+                    <span className="block text-[14px] font-semibold text-ink">
+                      Sondage
+                    </span>
+                    <span className="block text-[12px] text-ink-muted">
+                      Question rapide à la communauté
+                    </span>
+                  </span>
+                </label>
+              </div>
+            </Field>
 
-            <div className="mt-5 space-y-5">
-              <Field
-                label="Thématique"
-                hint="Une consultation peut porter sur plusieurs thématiques (RG-CON-02)."
+            <Field label="Titre" htmlFor="titre" required>
+              <TextInput
+                id="titre"
+                name="titre"
                 required
-              >
-                <ThematicPicker name="thematiques" multiple />
-              </Field>
+                maxLength={255}
+                placeholder="Faut-il rendre le vote obligatoire aux élections locales ?"
+              />
+            </Field>
 
-              <Field label="Titre de la consultation" htmlFor="titre" required>
-                <TextInput
-                  id="titre"
-                  name="titre"
-                  placeholder="Ex. : Impact de la transition énergétique…"
-                  required
-                />
-              </Field>
-
-              <Field
-                label="Résumé vulgarisé"
-                htmlFor="resume"
-                hint={
-                  <>
-                    RG-CON-09 · Ce résumé est lu par tous les citoyens, y compris
-                    peu alphabétisés. Privilégiez des phrases courtes et
-                    concrètes. {SUMMARY_MAX} caractères maximum.
-                  </>
-                }
+            <Field label="Description" htmlFor="description" required>
+              <TextArea
+                id="description"
+                name="description"
+                rows={4}
                 required
-              >
-                <TextArea
-                  id="resume"
-                  name="resume"
-                  rows={6}
-                  maxLength={SUMMARY_MAX}
-                  placeholder="Décrivez les enjeux de cette consultation de manière accessible à tous les citoyens…"
-                  required
-                />
-              </Field>
-            </div>
-          </Card>
+                placeholder="Le contexte complet de la question posée aux citoyens."
+              />
+            </Field>
 
-          <Card>
-            <CardHeader
-              title="Projet de loi rattaché"
-              description="Le document de référence consultable par les citoyens depuis l'application."
-            />
+            <Field
+              label="Résumé vulgarisé"
+              htmlFor="resume"
+              required
+              hint="RG-CON-09 : l'enjeu expliqué simplement, lisible par toutes et tous."
+            >
+              <TextArea
+                id="resume"
+                name="resume"
+                rows={3}
+                required
+                maxLength={600}
+                placeholder="En deux phrases : de quoi s'agit-il, et qu'est-ce que ça changerait ?"
+              />
+            </Field>
 
-            <div className="mt-5">
-              <Field label="Rechercher un document" htmlFor="projet">
-                <TextInput
-                  id="projet"
-                  name="projet"
-                  placeholder="Rechercher un document ou un texte de loi…"
-                />
-              </Field>
+            <Field
+              label="Options de vote"
+              required
+              hint="Au moins deux. Les options ne sont plus modifiables après création — intégrité du scrutin."
+            >
+              <div className="grid gap-2 sm:grid-cols-2">
+                {OPTIONS.map((option) => (
+                  <TextInput
+                    key={option.name}
+                    name={option.name}
+                    required={option.required}
+                    maxLength={255}
+                    placeholder={option.placeholder}
+                    aria-label={`Option de vote ${option.name.split("-")[1]}`}
+                  />
+                ))}
+              </div>
+            </Field>
 
-              <p className="mt-3 flex items-center gap-2 rounded-lg bg-surface-raised p-3 text-[13px] text-ink-subtle">
-                <FileSearch className="size-3.5 shrink-0" aria-hidden />
-                Aucun document sélectionné pour l&apos;instant.
-              </p>
-            </div>
-          </Card>
-        </div>
-
-        <div className="space-y-4">
-          <Card>
-            <CardHeader title="Période de vote" />
-
-            <div className="mt-5 space-y-5">
+            <div className="grid gap-5 sm:grid-cols-2">
               <Field label="Ouverture" htmlFor="ouverture" required>
                 <TextInput id="ouverture" name="ouverture" type="date" required />
               </Field>
-
-              <Field label="Clôture" htmlFor="cloture" required>
+              <Field
+                label="Clôture"
+                htmlFor="cloture"
+                required
+                hint="Le vote ferme à 23 h 59 ce jour-là."
+              >
                 <TextInput id="cloture" name="cloture" type="date" required />
               </Field>
             </div>
 
-            <p className="mt-4 flex items-start gap-2 rounded-lg bg-secondary-pale p-3 text-[13px] leading-relaxed text-ink-muted ring-1 ring-secondary/25">
-              <Info className="mt-0.5 size-3.5 shrink-0 text-secondary" aria-hidden />
-              Les votes sont automatiquement bloqués en dehors de cette période.
-              Un citoyen ne peut voter qu&apos;une seule fois.
-            </p>
-          </Card>
+            <Button
+              type="submit"
+              size="lg"
+              className="w-full"
+              icon={<Vote className="size-4" />}
+            >
+              Ouvrir la consultation
+            </Button>
+          </form>
+        </Card>
 
-          <Card className="bg-primary-pale ring-1 ring-primary/15">
-            <p className="flex items-start gap-2 text-[13px] leading-relaxed text-ink-muted">
-              <CalendarRange className="mt-0.5 size-3.5 shrink-0 text-primary" aria-hidden />
-              Une fois lancée, la consultation apparaît immédiatement dans
-              l&apos;onglet Participation de l&apos;application mobile.
+        <Card className="bg-secondary-pale ring-1 ring-secondary/25 lg:sticky lg:top-6">
+          <CardHeader title="Le secret du vote" />
+          <div className="mt-3 flex items-start gap-3">
+            <Info className="mt-0.5 size-[18px] shrink-0 text-secondary" aria-hidden />
+            <p className="text-[14px] leading-relaxed text-ink-muted">
+              L&apos;émargement (qui a voté) et l&apos;urne (ce qui a été voté)
+              sont enregistrés séparément, sans lien entre eux. Les résultats
+              restent invisibles des citoyens tant que vous ne les publiez pas
+              depuis la liste des consultations.
             </p>
-          </Card>
-
-          <Button type="submit" className="w-full" icon={<Rocket className="size-4" />}>
-            Lancer la consultation
-          </Button>
-        </div>
-      </form>
+          </div>
+        </Card>
+      </div>
     </>
   );
 }

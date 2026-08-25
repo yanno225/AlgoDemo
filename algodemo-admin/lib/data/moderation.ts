@@ -1,287 +1,195 @@
-import type {
-  Contribution,
-  Signalement,
-  VerificationItem,
-} from "@/lib/domain/types";
+import { apiFetch } from "@/lib/api/client";
 
 /**
- * File de modération : avis citoyens, signalements et triangulation.
+ * Modération — branchée sur l'API NestJS.
  *
- * TODO(backend) : GET /admin/moderation/contributions, /signalements,
- * /verifications — chacune paginée et filtrable par statut.
+ * Quatre files distinctes côté backend, réunies en un seul écran :
+ *  - avis citoyens en attente        (GET /avis/moderation)
+ *  - signalements de contenu         (GET /feed/signalements)
+ *  - contenus à vérifier/publier     (GET /feed/moderation)
+ *  - synthèses IA de la fiche pays   (GET /syntheses?statut=…)
+ *  - résumés de débats générés par IA (GET /debats/resumes/liste?statut=…)
+ *
+ * Les propositions de collecte (données chiffrées) ne sont PAS ici : leur
+ * validation exige le contexte de triangulation, qui vit dans l'écran
+ * Collecte. La page de modération y renvoie.
  */
 
-const CONTRIBUTIONS: Contribution[] = [
-  {
-    id: "ctr_1",
-    author: { id: "acc_10", firstName: "Marc", lastName: "Dupont" },
-    context: "Consultation Rail 2030",
-    thematicId: "politique",
-    body: "Le plan rail est insuffisant pour les zones rurales, il faudrait doubler les fréquences pour encourager le report modal réel.",
-    status: "new",
-    submittedAt: "2026-07-21T14:20:00.000Z",
-  },
-  {
-    id: "ctr_2",
-    author: { id: "acc_11", firstName: "Sophie", lastName: "V." },
-    context: "Réforme lycée",
-    thematicId: "jeunesse_societe",
-    body: "Il est crucial d'intégrer des modules d'éducation aux médias dès la seconde pour lutter contre les deepfakes.",
-    status: "new",
-    submittedAt: "2026-07-21T13:05:00.000Z",
-  },
-  {
-    id: "ctr_3",
-    author: { id: "acc_12", firstName: "Jean-Luc", lastName: "B." },
-    context: "Plan solaire",
-    thematicId: "societe_vivant",
-    body: "Pourquoi ne pas obliger l'installation de panneaux solaires sur tous les parkings de supermarchés dès 2025 ?",
-    status: "in_progress",
-    submittedAt: "2026-07-21T12:40:00.000Z",
-  },
-];
-
-const SIGNALEMENTS: Signalement[] = [
-  {
-    id: "sig_842",
-    reference: "#842",
-    category: "Voirie & propreté",
-    tag: "Voirie",
-    description:
-      "Un dépôt sauvage important a été constaté à l'angle de la rue des Lilas. Plusieurs sacs poubelles et des encombrants gênent le passage des piétons et des poussettes depuis hier soir.",
-    location: "12 Rue des Lilas, Abidjan",
-    photoUrl:
-      "https://images.unsplash.com/photo-1558618666-fcd25c85cd64?q=80&w=900",
-    status: "new",
-    reporter: "Marc Dupont",
-    reportedAt: "2026-07-20T18:32:00.000Z",
-    history: [
-      {
-        id: "sh_1",
-        label: "Signalement validé par la modération",
-        at: "2026-07-21T09:15:00.000Z",
-        by: "admin_julie",
-      },
-      {
-        id: "sh_2",
-        label: "Signalement créé",
-        at: "2026-07-20T18:32:00.000Z",
-        by: "Marc Dupont",
-      },
-    ],
-  },
-  {
-    id: "sig_841",
-    reference: "#841",
-    category: "Désinformation",
-    tag: "Désinformation",
-    description:
-      "Signalement d'une publication relayant des chiffres erronés sur le budget municipal, largement partagée en story.",
-    location: "Avenue de la République, Abidjan",
-    status: "new",
-    reporter: "Marc D. (Citoyen certifié)",
-    reportedAt: "2026-07-21T14:20:00.000Z",
-    history: [
-      {
-        id: "sh_3",
-        label: "Signalement créé",
-        at: "2026-07-21T14:20:00.000Z",
-        by: "Marc D.",
-      },
-    ],
-  },
-  {
-    id: "sig_840",
-    reference: "#840",
-    category: "Nuisance sonore",
-    tag: "Nuisance",
-    description:
-      "Pollution sonore persistante signalée à proximité du futur parc démocratique par plusieurs riverains.",
-    location: "Rue des Tulipes, Yamoussoukro",
-    status: "in_progress",
-    reporter: "Léa G.",
-    reportedAt: "2026-07-21T11:05:00.000Z",
-    history: [
-      {
-        id: "sh_4",
-        label: "Pris en charge par la modération",
-        at: "2026-07-21T11:40:00.000Z",
-        by: "admin_julie",
-      },
-      {
-        id: "sh_5",
-        label: "Signalement créé",
-        at: "2026-07-21T11:05:00.000Z",
-        by: "Léa G.",
-      },
-    ],
-  },
-  {
-    id: "sig_839",
-    reference: "#839",
-    category: "Environnement",
-    tag: "Environnement",
-    description:
-      "Décharge sauvage identifiée en bordure de forêt, avec présence de déchets de chantier.",
-    location: "Forêt du Banco, Abidjan",
-    status: "handled",
-    reporter: "Association Éco-Quartier",
-    reportedAt: "2026-07-20T09:00:00.000Z",
-    history: [
-      {
-        id: "sh_6",
-        label: "Traité — transmis aux services techniques",
-        at: "2026-07-20T15:00:00.000Z",
-        by: "admin_julie",
-      },
-    ],
-  },
-];
-
-const VERIFICATIONS: VerificationItem[] = [
-  {
-    id: "ver_1",
-    reference: "#VR-8829-01",
-    title: "Analyse impact environnemental A69",
-    excerpt:
-      "Selon des documents récemment déclassifiés, le projet de loi sur la biodiversité urbaine dissimulerait un transfert massif de fonds publics vers des intérêts privés non identifiés dans le secteur de l'énergie renouvelable.",
-    origin: "ai",
-    priority: "high",
-    headline: "Résultat IA",
-    summary:
-      "Concordance établie à 85 % avec les rapports du GIEC et les publications officielles de l'État. Données chiffrées cohérentes.",
-    postedAt: "2026-07-18T09:00:00.000Z",
-    shares: 4300,
-    sources: [
-      { id: "src_1", label: "Doc_Biodiv_Loi_2023", kind: "Source gouvernementale" },
-      { id: "src_2", label: "Article Le Monde — Anz", kind: "Média indépendant" },
-    ],
-    steps: [
-      {
-        step: 1,
-        label: "IA — Analyse sémantique",
-        status: "success",
-        detail:
-          "Sources corrélées à 85 %. Aucune manipulation syntaxique détectée dans le corpus de référence.",
-      },
-      {
-        step: 2,
-        label: "Point focal technique",
-        status: "validated",
-        detail: "Validé par Jean D. (expert politiques publiques).",
-        by: "Jean Dupont",
-      },
-      {
-        step: 3,
-        label: "Investigation finale",
-        status: "pending",
-        detail:
-          "Investigation de terrain en cours pour confirmer l'origine des fuites mentionnées.",
-      },
-    ],
-  },
-  {
-    id: "ver_2",
-    reference: "#VR-8830-02",
-    title: "Réforme du temps de travail 2024",
-    excerpt:
-      "Analyse comparative des accords de branche signés depuis la réforme, et de leur effet réel sur la durée hebdomadaire moyenne.",
-    origin: "point_focal",
-    priority: "normal",
-    headline: "Certification expert",
-    summary:
-      "Vérifié par J. Dupont (expert éco.). Les sources syndicales et patronales sont correctement citées. Prêt pour diffusion.",
-    postedAt: "2026-07-17T11:30:00.000Z",
-    shares: 890,
-    sources: [
-      { id: "src_3", label: "Accords de branche 2024", kind: "Source gouvernementale" },
-    ],
-    steps: [
-      { step: 1, label: "IA — Analyse sémantique", status: "success", detail: "Aucune incohérence détectée." },
-      {
-        step: 2,
-        label: "Point focal technique",
-        status: "validated",
-        detail: "Certification accordée par J. Dupont.",
-        by: "Jean Dupont",
-      },
-      { step: 3, label: "Investigation finale", status: "validated", detail: "Aucune investigation requise." },
-    ],
-  },
-  {
-    id: "ver_3",
-    reference: "#VR-8831-03",
-    title: "Déclaration patrimoine élu local",
-    excerpt:
-      "Comparaison entre la déclaration publiée et les registres fonciers accessibles au public.",
-    origin: "investigation",
-    priority: "high",
-    headline: "Alerte bloquante",
-    summary:
-      "Discordance majeure entre la source primaire et la citation. Suspicion de détournement de contexte. Nécessite une contre-enquête manuelle.",
-    postedAt: "2026-07-19T16:10:00.000Z",
-    shares: 12400,
-    sources: [
-      { id: "src_4", label: "Registre foncier national", kind: "Source gouvernementale" },
-    ],
-    steps: [
-      { step: 1, label: "IA — Analyse sémantique", status: "success", detail: "Extraction réalisée." },
-      {
-        step: 2,
-        label: "Point focal technique",
-        status: "blocked",
-        detail: "Discordance majeure relevée entre la source primaire et la citation.",
-      },
-      { step: 3, label: "Investigation finale", status: "pending", detail: "Contre-enquête manuelle à ouvrir." },
-    ],
-  },
-  {
-    id: "ver_4",
-    reference: "#VR-8832-04",
-    title: "Étude sur la biodiversité urbaine",
-    excerpt:
-      "Recensement des espèces observées dans les corridors écologiques des zones périurbaines.",
-    origin: "ai",
-    priority: "normal",
-    headline: "Analyse en cours",
-    summary:
-      "Extraction des métadonnées et croisement avec les bases de données universitaires en cours.",
-    postedAt: "2026-07-21T08:00:00.000Z",
-    shares: 210,
-    sources: [],
-    steps: [
-      { step: 1, label: "IA — Analyse sémantique", status: "pending", detail: "Extraction en cours." },
-      { step: 2, label: "Point focal technique", status: "pending", detail: "En attente de l'étape 1." },
-      { step: 3, label: "Investigation finale", status: "pending", detail: "En attente." },
-    ],
-  },
-];
-
-export async function listContributions(): Promise<Contribution[]> {
-  return CONTRIBUTIONS;
+interface ThematiqueApi {
+  id: string;
+  libelle: string;
 }
 
-export async function listSignalements(): Promise<Signalement[]> {
-  return SIGNALEMENTS;
+export interface AvisEnAttente {
+  id: string;
+  texte: string;
+  auteurId: string;
+  /** Nom de l'auteur si résoluble (liste des comptes réservée à l'ADMIN). */
+  auteur: string | null;
+  thematique: ThematiqueApi | null;
+  creeLe: string;
 }
 
-export async function getSignalement(id: string): Promise<Signalement | null> {
-  return SIGNALEMENTS.find((item) => item.id === id) ?? null;
+export interface SignalementEnAttente {
+  id: string;
+  motif: string;
+  signalePar: string;
+  /** Nom du signaleur si résoluble (liste des comptes réservée à l'ADMIN). */
+  signaleur: string | null;
+  creeLe: string;
+  contenu: { id: string; titre: string };
 }
 
-export async function listVerifications(): Promise<VerificationItem[]> {
-  return VERIFICATIONS;
+export type StatutVerification =
+  | "NON_VERIFIE"
+  | "PARTIELLEMENT_VERIFIE"
+  | "VERIFIE";
+
+export interface ContenuAModerer {
+  id: string;
+  titre: string;
+  corps: string;
+  type: string;
+  statutVerification: StatutVerification;
+  estPublie: boolean;
+  estOfficiel: boolean;
+  source: string | null;
+  urlMedia: string | null;
+  thematique: ThematiqueApi | null;
+  creeLe: string;
 }
 
-export async function getVerification(id: string): Promise<VerificationItem | null> {
-  return VERIFICATIONS.find((item) => item.id === id) ?? null;
+/** Texte généré par l'IA, en attente de validation humaine. */
+export interface TexteAValider {
+  id: string;
+  /** Ce que l'IA a produit — jamais publié tel quel. */
+  texteGenereIA: string;
+  dateGeneration: string;
+  /** Synthèse : pays concerné. Résumé : titre du débat. */
+  contexte: string;
+  thematique: ThematiqueApi | null;
 }
 
-/** Compteurs affichés dans les onglets et sur le tableau de bord. */
-export async function getModerationCounts() {
+interface AvisApi {
+  id: string;
+  texte: string;
+  auteurId: string;
+  thematique: ThematiqueApi | null;
+  creeLe: string;
+}
+
+async function nomsDesComptes(): Promise<Map<string, string>> {
+  try {
+    const comptes = await apiFetch<
+      { id: string; prenom: string; nom: string }[]
+    >("/auth/users");
+    return new Map(
+      comptes.map((c) => [c.id, `${c.prenom} ${c.nom}`.trim()]),
+    );
+  } catch {
+    // Liste des comptes réservée à l'ADMIN : un point focal verra « Citoyen »
+    // à la place des noms — dégradation assumée plutôt qu'un écran en erreur.
+    return new Map();
+  }
+}
+
+interface SignalementApi {
+  id: string;
+  motif: string;
+  signalePar: string;
+  creeLe: string;
+  contenu: { id: string; titre: string };
+}
+
+interface SyntheseApi {
+  id: string;
+  paysOuZone: string;
+  texteGenereIA: string;
+  dateGeneration: string;
+  thematique: ThematiqueApi | null;
+}
+
+export async function listSynthesesEnAttente(): Promise<TexteAValider[]> {
+  const syntheses = await apiFetch<SyntheseApi[]>("/syntheses", {
+    parametres: { statut: "EN_ATTENTE_VALIDATION" },
+  });
+  return syntheses.map((s) => ({
+    id: s.id,
+    texteGenereIA: s.texteGenereIA,
+    dateGeneration: s.dateGeneration,
+    contexte: s.paysOuZone,
+    thematique: s.thematique,
+  }));
+}
+
+interface ResumeApi {
+  id: string;
+  texteGenereIA: string;
+  dateGeneration: string;
+  debat: { id: string; titre: string; thematique?: ThematiqueApi | null } | null;
+}
+
+export async function listResumesEnAttente(): Promise<TexteAValider[]> {
+  const resumes = await apiFetch<ResumeApi[]>("/debats/resumes/liste", {
+    parametres: { statut: "EN_ATTENTE_VALIDATION" },
+  });
+  return resumes.map((r) => ({
+    id: r.id,
+    texteGenereIA: r.texteGenereIA,
+    dateGeneration: r.dateGeneration,
+    contexte: r.debat?.titre ?? "Débat",
+    thematique: r.debat?.thematique ?? null,
+  }));
+}
+
+/** Propositions de collecte en attente — comptées pour le renvoi vers la Collecte. */
+async function compterPropositionsEnAttente(): Promise<number> {
+  try {
+    const propositions = await apiFetch<unknown[]>("/collecte/propositions", {
+      parametres: { statut: "EN_ATTENTE" },
+    });
+    return propositions.length;
+  } catch {
+    // Réservé à l'ADMIN : un point focal voit simplement le renvoi disparaître.
+    return 0;
+  }
+}
+
+export interface FilesModeration {
+  avis: AvisEnAttente[];
+  signalements: SignalementEnAttente[];
+  contenus: ContenuAModerer[];
+  syntheses: TexteAValider[];
+  resumes: TexteAValider[];
+  /** Données chiffrées en attente — validées dans l'écran Collecte. */
+  propositionsEnAttente: number;
+}
+
+/**
+ * Toutes les files en un chargement : les cinq listes partent en parallèle et
+ * la résolution des noms (un seul appel) sert aux avis comme aux signalements.
+ */
+export async function chargerFilesModeration(): Promise<FilesModeration> {
+  const [noms, avis, signalements, contenus, syntheses, resumes, propositionsEnAttente] =
+    await Promise.all([
+      nomsDesComptes(),
+      apiFetch<AvisApi[]>("/avis/moderation"),
+      apiFetch<SignalementApi[]>("/feed/signalements"),
+      apiFetch<ContenuAModerer[]>("/feed/moderation"),
+      listSynthesesEnAttente(),
+      listResumesEnAttente(),
+      compterPropositionsEnAttente(),
+    ]);
+
   return {
-    contributions: CONTRIBUTIONS.length,
-    signalements: SIGNALEMENTS.length,
-    verifications: VERIFICATIONS.length,
+    avis: avis.map((a) => ({ ...a, auteur: noms.get(a.auteurId) ?? null })),
+    signalements: signalements.map((s) => ({
+      ...s,
+      signaleur: noms.get(s.signalePar) ?? null,
+    })),
+    contenus,
+    syntheses,
+    resumes,
+    propositionsEnAttente,
   };
 }

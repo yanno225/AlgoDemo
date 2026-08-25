@@ -12,7 +12,9 @@ export type NavIcon =
   | "accounts"
   | "moderation"
   | "debates"
-  | "referential";
+  | "signalements"
+  | "referential"
+  | "collecte";
 
 export interface NavItem {
   href: string;
@@ -55,12 +57,27 @@ export const NAV_ITEMS: NavItem[] = [
     allowedRoles: CONSULTATION_CREATOR_ROLES,
   },
   {
+    // Le terrain remonté par les citoyens : reçu → en cours → résolu.
+    href: "/signalements",
+    label: "Signalements citoyens",
+    icon: "signalements",
+    allowedRoles: MODERATOR_ROLES,
+  },
+  {
     // Les points focaux consultent le référentiel pour arbitrer leurs
     // modérations ; seuls les administrateurs peuvent le modifier.
     href: "/referentiel",
     label: "Référentiel",
     icon: "referential",
     allowedRoles: MODERATOR_ROLES,
+  },
+  {
+    // Validation des chiffres avant publication : réservé aux administrateurs,
+    // comme les routes /collecte du backend (@Roles(Role.ADMIN)).
+    href: "/collecte",
+    label: "Collecte & veille",
+    icon: "collecte",
+    allowedRoles: USER_ADMIN_ROLES,
   },
 ];
 

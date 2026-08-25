@@ -1,78 +1,91 @@
-import Link from "next/link";
-import Image from "next/image";
-import { MapPin, User, ImageOff } from "lucide-react";
-import type { ModerationStatus, Signalement } from "@/lib/domain/types";
+import { EyeOff, Flag, ShieldCheck } from "lucide-react";
+import type { SignalementEnAttente } from "@/lib/data/moderation";
+import { traiterSignalement } from "@/lib/data/moderation-actions";
 import { formatRelative } from "@/lib/format";
-import { Badge, type BadgeTone } from "@/components/ui/Badge";
-
-/** Correspondance statut de traitement → ton visuel. */
-export const STATUS_TONES: Record<ModerationStatus, BadgeTone> = {
-  new: "info",
-  in_progress: "warning",
-  handled: "success",
-  rejected: "danger",
-};
-
-export const STATUS_LABELS: Record<ModerationStatus, string> = {
-  new: "Nouveau",
-  in_progress: "En cours",
-  handled: "Traité",
-  rejected: "Rejeté",
-};
+import { Button } from "@/components/ui/Button";
+import { PanneauAction } from "@/components/referentiel/PanneauAction";
 
 interface SignalementCardProps {
-  signalement: Signalement;
+  signalement: SignalementEnAttente;
   index?: number;
 }
 
-/** Signalement citoyen dans la file de modération. */
+/**
+ * Signalement d'un contenu du feed par un citoyen.
+ *
+ * Deux issues : dépublier le contenu visé (retiré immédiatement de
+ * l'application) ou clore le signalement sans action. La dépublication
+ * touche tous les lecteurs — elle se confirme en deux temps.
+ */
 export function SignalementCard({ signalement, index = 0 }: SignalementCardProps) {
   return (
-    <Link
-      href={`/moderation/signalements/${signalement.id}`}
-      className="group animate-rise flex gap-4 rounded-xl bg-surface p-4 shadow-sm ring-1 ring-hairline transition-all duration-200 ease-[var(--ease-out-soft)] hover:-translate-y-0.5 hover:shadow-md"
+    <article
+      className="animate-rise rounded-xl bg-surface p-5 shadow-sm ring-1 ring-hairline"
       style={{ animationDelay: `${index * 45}ms` }}
     >
-      <div className="relative size-20 shrink-0 overflow-hidden rounded-lg bg-surface-raised">
-        {signalement.photoUrl ? (
-          <Image
-            src={signalement.photoUrl}
-            alt=""
-            fill
-            sizes="80px"
-            className="object-cover"
-          />
-        ) : (
-          <span className="grid size-full place-items-center text-ink-subtle">
-            <ImageOff className="size-5" aria-hidden />
-          </span>
-        )}
-      </div>
-
-      <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-center gap-1.5">
-          <Badge tone="neutral">{signalement.tag}</Badge>
-          <Badge tone={STATUS_TONES[signalement.status]} dot>
-            {STATUS_LABELS[signalement.status]}
-          </Badge>
+      <header className="flex items-start gap-3">
+        <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-danger-pale">
+          <Flag className="size-4 text-danger" aria-hidden />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="text-[11px] font-bold uppercase tracking-[0.08em] text-ink-subtle">
+            Contenu visé
+          </p>
+          <p className="text-[15px] font-bold leading-snug text-ink">
+            {signalement.contenu.titre}
+          </p>
         </div>
+      </header>
 
-        <p className="mt-2 line-clamp-2 text-[14px] font-semibold leading-snug text-ink group-hover:text-primary">
-          {signalement.description}
-        </p>
+      <blockquote className="mt-4 rounded-lg bg-surface-raised p-3 text-[14px] leading-relaxed text-ink">
+        « {signalement.motif} »
+      </blockquote>
 
-        <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[12px] text-ink-subtle">
-          <span className="inline-flex items-center gap-1">
-            <MapPin className="size-3" aria-hidden />
-            {signalement.location}
-          </span>
-          <span className="inline-flex items-center gap-1">
-            <User className="size-3" aria-hidden />
-            {signalement.reporter}
-          </span>
-          <span className="ml-auto">{formatRelative(signalement.reportedAt)}</span>
-        </div>
-      </div>
-    </Link>
+      <p className="mt-2 text-[12px] text-ink-subtle">
+        Signalé par {signalement.signaleur ?? "un citoyen"} ·{" "}
+        {formatRelative(signalement.creeLe)}
+      </p>
+
+      <footer className="mt-4 flex flex-wrap items-start gap-2 border-t border-line-soft pt-4">
+        <form action={traiterSignalement} className="flex-1">
+          <input type="hidden" name="id" value={signalement.id} />
+          <input type="hidden" name="action" value="IGNORER" />
+          <Button
+            type="submit"
+            size="sm"
+            variant="outline"
+            className="w-full"
+            icon={<ShieldCheck className="size-3.5" />}
+          >
+            Sans suite
+          </Button>
+        </form>
+
+        <PanneauAction
+          libelle="Dépublier le contenu"
+          danger
+          icone={<EyeOff className="size-3.5" aria-hidden />}
+          className="flex-1"
+        >
+          <p className="text-[13px] leading-relaxed text-ink-muted">
+            « {signalement.contenu.titre} » sera retiré immédiatement de
+            l&apos;application pour tous les citoyens.
+          </p>
+          <form action={traiterSignalement} className="mt-3">
+            <input type="hidden" name="id" value={signalement.id} />
+            <input type="hidden" name="action" value="DEPUBLIER" />
+            <Button
+              type="submit"
+              size="sm"
+              variant="outline"
+              className="w-full border-danger text-danger hover:bg-danger-pale"
+              icon={<EyeOff className="size-3.5" />}
+            >
+              Confirmer la dépublication
+            </Button>
+          </form>
+        </PanneauAction>
+      </footer>
+    </article>
   );
 }

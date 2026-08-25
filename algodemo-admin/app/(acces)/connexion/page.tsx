@@ -4,8 +4,12 @@ import { LoginForm } from "@/components/access/LoginForm";
 
 export const metadata = { title: "Connexion" };
 
+/**
+ * Erreurs portées par l'URL — celles qui surviennent hors du formulaire
+ * (session refusée par le back-office). Les échecs de connexion eux-mêmes
+ * sont rendus dans le formulaire, qui conserve ainsi la saisie en cours.
+ */
 const ERRORS: Record<string, string> = {
-  identifiants: "Identifiants incorrects. Vérifiez votre saisie.",
   "acces-refuse":
     "Votre compte n'a pas accès à l'administration. Les citoyens utilisent l'application mobile AlgoDémo.",
 };

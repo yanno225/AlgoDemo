@@ -1,25 +1,43 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { ChevronRight, Plus, Pencil, Trash2, Globe } from "lucide-react";
-import { getIndicator } from "@/lib/data/referential";
-import { getThematic } from "@/lib/domain/thematics";
-import { formatDate } from "@/lib/format";
+import {
+  ChartLine,
+  ChevronRight,
+  Database,
+  Pencil,
+  Trash2,
+} from "lucide-react";
+import { getIndicateur, getValeursIndicateur } from "@/lib/data/referentiel";
+import {
+  renommerIndicateur,
+  supprimerIndicateur,
+} from "@/lib/data/referentiel-actions";
+import { getThematicByLabel } from "@/lib/domain/thematics";
+import { formatShortDate } from "@/lib/format";
 import { Card, CardHeader } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
+import { TextInput } from "@/components/ui/Field";
+import { PanneauAction } from "@/components/referentiel/PanneauAction";
 
 export default async function IndicateurPage({
   params,
 }: {
+  // Next 16 : `params` est asynchrone.
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const result = await getIndicator(id);
+  const [contexte, valeurs] = await Promise.all([
+    getIndicateur(id),
+    getValeursIndicateur(id),
+  ]);
+  if (!contexte) notFound();
 
-  if (!result) notFound();
-
-  const { indicator, criterion, thematicId } = result;
-  const thematic = getThematic(thematicId);
+  const { thematique, critere, indicateur } = contexte;
+  const habillage = getThematicByLabel(thematique.libelle);
+  const couleur = habillage
+    ? `var(--color-${habillage.color})`
+    : "var(--color-primary)";
 
   return (
     <>
@@ -35,93 +53,162 @@ export default async function IndicateurPage({
           <ChevronRight className="size-3" aria-hidden />
           <li>
             <Link
-              href={`/referentiel/${thematicId}`}
+              href={`/referentiel/${thematique.id}`}
               className="transition-colors hover:text-primary"
             >
-              {thematic?.label}
+              {thematique.libelle}
             </Link>
           </li>
           <ChevronRight className="size-3" aria-hidden />
-          <li className="font-medium text-ink">{criterion.label}</li>
+          <li className="font-medium text-ink">{critere.libelle}</li>
         </ol>
       </nav>
 
-      <div className="mb-6">
-        <Badge tone="brand" className="font-mono">{indicator.code}</Badge>
-        <h1 className="mt-2 font-heading text-[28px] font-bold text-ink">
-          {indicator.label}
-        </h1>
-        <p className="mt-2 max-w-3xl text-[15px] leading-relaxed text-ink-muted">
-          {indicator.description}
-        </p>
+      <div className="mb-8 flex items-start gap-3">
+        <span
+          className="mt-1.5 h-9 w-1 shrink-0 rounded-full"
+          style={{ backgroundColor: couleur }}
+          aria-hidden
+        />
+        <div>
+          <p className="text-[12px] font-bold uppercase tracking-wide text-ink-subtle">
+            Indicateur
+          </p>
+          <h1 className="max-w-3xl font-heading text-[26px] font-bold leading-tight text-ink">
+            {indicateur.libelle}
+          </h1>
+        </div>
       </div>
 
-      <Card flush>
-        <div className="flex flex-wrap items-center justify-between gap-3 p-5">
+      <div className="grid items-start gap-5 lg:grid-cols-3">
+        {/* ─── Valeurs publiées ────────────────────────────────────── */}
+        <Card flush className="overflow-hidden lg:col-span-2">
           <CardHeader
-            title="Valeurs enregistrées"
-            description={`${indicator.entries.length} entrée${
-              indicator.entries.length > 1 ? "s" : ""
-            } au total, tous pays confondus.`}
-            className="flex-1"
+            title="Valeurs publiées"
+            description="Ce que la fiche pays affiche aux citoyens — issues de la collecte, après validation humaine."
+            className="p-5"
+            action={
+              <Badge tone={valeurs.length > 0 ? "brand" : "neutral"}>
+                <ChartLine className="size-2.5" aria-hidden />
+                {valeurs.length} valeur{valeurs.length > 1 ? "s" : ""}
+              </Badge>
+            }
           />
 
-          {/* TODO(backend) : POST /admin/indicators/:id/entries */}
-          <Button size="sm" icon={<Plus className="size-4" />}>
-            Ajouter une valeur
-          </Button>
-        </div>
+          {valeurs.length > 0 ? (
+            <div className="overflow-x-auto border-t border-line-soft">
+              <table className="w-full text-left text-[14px]">
+                <thead>
+                  <tr className="border-b border-line-soft bg-surface-raised text-[11px] font-bold uppercase tracking-wide text-ink-subtle">
+                    <th className="px-5 py-3">Pays / zone</th>
+                    <th className="px-5 py-3">Valeur</th>
+                    <th className="px-5 py-3">Mesure</th>
+                    <th className="px-5 py-3">Source</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-line-soft">
+                  {valeurs.map((valeur, index) => (
+                    <tr
+                      key={valeur.id}
+                      className="animate-rise transition-colors hover:bg-surface-raised"
+                      style={{ animationDelay: `${index * 25}ms` }}
+                    >
+                      <td className="px-5 py-3 font-medium text-ink">
+                        {valeur.paysOuZone}
+                      </td>
+                      <td className="px-5 py-3 font-heading text-[16px] font-bold tabular text-primary">
+                        {valeur.valeur}
+                      </td>
+                      <td className="px-5 py-3 text-ink-muted">
+                        {formatShortDate(valeur.dateMesure)}
+                      </td>
+                      <td className="max-w-[220px] truncate px-5 py-3 text-[13px] text-ink-subtle">
+                        {valeur.source}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="border-t border-line-soft px-5 py-12 text-center">
+              <Database className="mx-auto size-6 text-ink-subtle" aria-hidden />
+              <p className="mx-auto mt-3 max-w-sm text-[14px] leading-relaxed text-ink-muted">
+                Aucune valeur publiée pour le moment. Les valeurs arrivent par
+                la <Link href="/collecte" className="font-semibold text-primary hover:underline">collecte</Link>{" "}
+                — proposition, triangulation, puis validation humaine.
+              </p>
+            </div>
+          )}
+        </Card>
 
-        {indicator.entries.length === 0 ? (
-          <p className="px-5 pb-8 text-center text-[14px] text-ink-muted">
-            Aucune valeur n&apos;a encore été enregistrée pour cet indicateur.
-          </p>
-        ) : (
-          <ul className="divide-y divide-line-soft border-t border-line-soft">
-            {indicator.entries.map((entry, index) => (
-              <li
-                key={entry.id}
-                className="animate-rise flex flex-wrap items-center gap-4 px-5 py-4"
-                style={{ animationDelay: `${index * 35}ms` }}
-              >
-                <span className="w-16 shrink-0 font-heading text-[20px] font-bold text-primary">
-                  {entry.value}
-                </span>
+        {/* ─── Gestion ─────────────────────────────────────────────── */}
+        <Card className="lg:sticky lg:top-6">
+          <CardHeader
+            title="Gestion"
+            description="L'IA ne rattache une donnée qu'aux indicateurs de cette liste."
+          />
 
-                <div className="min-w-0 flex-1">
-                  <p className="flex items-center gap-1.5 text-[14px] font-semibold text-ink">
-                    <Globe className="size-3.5 text-ink-subtle" aria-hidden />
-                    {entry.country}
-                    <span className="font-normal text-ink-subtle">
-                      · {formatDate(entry.recordedAt)}
-                    </span>
-                  </p>
-                  <p className="mt-0.5 text-[12px] text-ink-subtle">
-                    Source : {entry.source}
-                  </p>
-                </div>
+          <div className="mt-4 space-y-2">
+            <PanneauAction
+              libelle="Renommer l'indicateur"
+              icone={<Pencil className="size-3.5" aria-hidden />}
+            >
+              <p className="text-[13px] leading-relaxed text-ink-muted">
+                Les connecteurs (Banque Mondiale, OMS) se repèrent au libellé
+                exact — vérifiez leurs mappings après un renommage.
+              </p>
+              <form action={renommerIndicateur} className="mt-3 space-y-2">
+                <input type="hidden" name="id" value={indicateur.id} />
+                <TextInput
+                  name="libelle"
+                  required
+                  maxLength={500}
+                  defaultValue={indicateur.libelle}
+                  aria-label="Nouveau libellé de l'indicateur"
+                  className="h-10 text-[13px]"
+                />
+                <Button type="submit" size="sm" className="w-full">
+                  Renommer
+                </Button>
+              </form>
+            </PanneauAction>
 
-                <div className="flex shrink-0 gap-1">
-                  <button
-                    type="button"
-                    aria-label={`Modifier la valeur ${entry.value} pour ${entry.country}`}
-                    className="grid size-8 place-items-center rounded-md text-ink-subtle transition-colors hover:bg-surface-raised hover:text-primary"
-                  >
-                    <Pencil className="size-3.5" aria-hidden />
-                  </button>
-                  <button
-                    type="button"
-                    aria-label={`Supprimer la valeur ${entry.value} pour ${entry.country}`}
-                    className="grid size-8 place-items-center rounded-md text-ink-subtle transition-colors hover:bg-danger-pale hover:text-danger"
-                  >
-                    <Trash2 className="size-3.5" aria-hidden />
-                  </button>
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
-      </Card>
+            <PanneauAction
+              libelle="Supprimer l'indicateur"
+              danger
+              icone={<Trash2 className="size-3.5" aria-hidden />}
+            >
+              <p className="text-[13px] leading-relaxed text-ink-muted">
+                Suppression définitive :{" "}
+                <strong className="text-danger">
+                  {valeurs.length} valeur{valeurs.length > 1 ? "s" : ""} publiée
+                  {valeurs.length > 1 ? "s" : ""}
+                </strong>{" "}
+                et toutes les propositions de collecte associées disparaîtront
+                de la fiche pays.
+              </p>
+              <form action={supprimerIndicateur} className="mt-3">
+                <input type="hidden" name="id" value={indicateur.id} />
+                <input
+                  type="hidden"
+                  name="retour"
+                  value={`/referentiel/${thematique.id}`}
+                />
+                <Button
+                  type="submit"
+                  size="sm"
+                  variant="outline"
+                  className="w-full border-danger text-danger hover:bg-danger-pale"
+                  icon={<Trash2 className="size-3.5" />}
+                >
+                  Supprimer définitivement
+                </Button>
+              </form>
+            </PanneauAction>
+          </div>
+        </Card>
+      </div>
     </>
   );
 }

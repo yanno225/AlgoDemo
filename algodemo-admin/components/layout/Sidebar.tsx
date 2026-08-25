@@ -7,7 +7,9 @@ import {
   Users,
   ShieldCheck,
   MessagesSquare,
+  Megaphone,
   Library,
+  Radar,
 } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { BrandMark } from "@/components/ui/BrandMark";
@@ -19,7 +21,9 @@ export const NAV_ICONS: Record<NavIcon, typeof LayoutDashboard> = {
   accounts: Users,
   moderation: ShieldCheck,
   debates: MessagesSquare,
+  signalements: Megaphone,
   referential: Library,
+  collecte: Radar,
 };
 
 interface SidebarProps {

@@ -38,3 +38,24 @@ export type ThematicId = (typeof THEMATICS)[number]["id"];
 
 export const getThematic = (id: string) =>
   THEMATICS.find((thematic) => thematic.id === id);
+
+const normaliser = (texte: string) =>
+  texte
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .trim();
+
+/**
+ * Habillage visuel d'une thématique à partir de son LIBELLÉ backend.
+ *
+ * Le backend identifie les thématiques par UUID et libellé (« Genre et
+ * Société »…) ; la charte FID, elle, est indexée ici. La correspondance se
+ * fait sur le libellé normalisé (casse et accents ignorés) pour survivre à
+ * une retouche typographique. Une thématique inconnue reçoit un habillage
+ * neutre plutôt que de faire échouer la page.
+ */
+export const getThematicByLabel = (libelle: string) =>
+  THEMATICS.find(
+    (thematic) => normaliser(thematic.label) === normaliser(libelle),
+  );

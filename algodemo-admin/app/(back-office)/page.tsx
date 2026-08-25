@@ -5,21 +5,21 @@ import {
   BadgeCheck,
   Sparkles,
   ArrowUpRight,
-  Users,
   Radio,
-  TrendingUp,
 } from "lucide-react";
 import { getSession } from "@/lib/auth/session";
 import { getDashboardAlerts, getRecentActivity } from "@/lib/data/dashboard";
-import { listDebates, listConsultations, listAiSummaries } from "@/lib/data/debates";
-import { getThematic } from "@/lib/domain/thematics";
-import { formatDeadline, formatNumber, formatRelative } from "@/lib/format";
+import {
+  estOuverte,
+  listConsultationsAdmin,
+  listDebats,
+} from "@/lib/data/debats";
+import { listResumesEnAttente } from "@/lib/data/moderation";
+import { formatDeadline, formatRelative } from "@/lib/format";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Card, CardHeader } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { StatusDot } from "@/components/ui/StatusDot";
-import { ProgressBar } from "@/components/ui/ProgressBar";
-import { Sparkline } from "@/components/ui/Sparkline";
 import { CountUp } from "@/components/ui/CountUp";
 
 export const metadata = { title: "Tableau de bord" };
@@ -30,28 +30,20 @@ const ALERT_META = {
   certification: { icon: BadgeCheck, color: "var(--color-primary-light)" },
 } as const;
 
-// TODO(backend) : série de participation des 14 derniers jours.
-const PARTICIPATION_TREND = [
-  180, 210, 195, 260, 240, 320, 290, 380, 420, 390, 480, 520, 610, 680,
-];
-
 export default async function DashboardPage() {
-  const [user, alerts, activity, debates, consultations, summaries] =
+  const [user, alerts, activity, debats, consultations, resumes] =
     await Promise.all([
       getSession(),
       getDashboardAlerts(),
       getRecentActivity(),
-      listDebates(),
-      listConsultations(),
-      listAiSummaries(),
+      listDebats(),
+      listConsultationsAdmin(),
+      listResumesEnAttente().catch(() => []),
     ]);
 
-  const liveDebate = debates.find((debate) => debate.status === "live");
-  const openConsultations = consultations.filter((item) => item.status === "open");
-  const totalEngaged = openConsultations.reduce(
-    (sum, item) => sum + item.participants,
-    0
-  );
+  // Plusieurs directs simultanés sont un cas nominal : tous affichés.
+  const enDirect = debats.filter((debat) => debat.statut === "EN_COURS");
+  const ouvertes = consultations.filter(estOuverte);
 
   return (
     <>
@@ -117,28 +109,36 @@ export default async function DashboardPage() {
         })}
       </div>
 
-      {/* ─── Tendance de participation ───────────────────────────── */}
+      {/* ─── Le pouls de la plateforme ───────────────────────────────
+          Trois compteurs réels — pas de courbe tant que l'API n'expose pas
+          de série temporelle : un vrai zéro vaut mieux qu'une tendance
+          inventée. */}
       <Card className="mb-5 animate-rise" style={{ animationDelay: "180ms" }}>
-        <div className="flex flex-wrap items-end justify-between gap-6">
-          <div className="min-w-0">
+        <div className="grid gap-6 sm:grid-cols-3">
+          <div>
             <p className="text-[12px] font-bold uppercase tracking-[0.08em] text-ink-subtle">
-              Participation citoyenne
+              Débats en direct
             </p>
-            <p className="tabular mt-2 font-heading text-[44px] font-extrabold leading-none text-primary">
-              <CountUp value={totalEngaged} />
-            </p>
-            <p className="mt-2 inline-flex items-center gap-1.5 text-[13px] font-medium text-success">
-              <TrendingUp className="size-3.5" aria-hidden />
-              Sur les consultations ouvertes
+            <p className="tabular mt-2 font-heading text-[40px] font-extrabold leading-none text-primary">
+              <CountUp value={enDirect.length} />
             </p>
           </div>
-
-          <Sparkline
-            data={PARTICIPATION_TREND}
-            label="Évolution de la participation sur 14 jours"
-            width={260}
-            height={60}
-          />
+          <div>
+            <p className="text-[12px] font-bold uppercase tracking-[0.08em] text-ink-subtle">
+              Consultations ouvertes
+            </p>
+            <p className="tabular mt-2 font-heading text-[40px] font-extrabold leading-none text-primary">
+              <CountUp value={ouvertes.length} />
+            </p>
+          </div>
+          <div>
+            <p className="text-[12px] font-bold uppercase tracking-[0.08em] text-ink-subtle">
+              Résumés IA en attente
+            </p>
+            <p className="tabular mt-2 font-heading text-[40px] font-extrabold leading-none text-primary">
+              <CountUp value={resumes.length} />
+            </p>
+          </div>
         </div>
       </Card>
 
@@ -157,94 +157,75 @@ export default async function DashboardPage() {
             />
 
             <div className="mt-5 space-y-3">
-              {liveDebate && (
-                <article className="relative overflow-hidden rounded-lg bg-rail p-4">
+              {/* Chaque direct a sa carte : les lives simultanés sont un cas
+                  nominal, jamais réduits à « un seul en vedette ». */}
+              {enDirect.map((debat) => (
+                <article
+                  key={debat.id}
+                  className="relative overflow-hidden rounded-lg bg-rail p-4"
+                >
                   <div className="flex items-center gap-2 text-danger">
                     <StatusDot pulse />
                     <span className="text-[12px] font-bold uppercase tracking-wide text-white/90">
                       En direct
                     </span>
-                    <span className="tabular ml-auto inline-flex items-center gap-1.5 text-[13px] font-medium text-white/70">
-                      <Users className="size-3.5" aria-hidden />
-                      {formatNumber(liveDebate.participants ?? 0)}
-                    </span>
+                    {debat.thematique && (
+                      <span className="ml-auto text-[11px] font-bold uppercase tracking-wide text-white/60">
+                        {debat.thematique.libelle}
+                      </span>
+                    )}
                   </div>
 
                   <h3 className="mt-2 text-[15px] font-bold text-white">
-                    {liveDebate.title}
+                    {debat.titre}
                   </h3>
-                  <p className="mt-1 text-[13px] text-white/55">
-                    Modéré par {liveDebate.moderator.firstName}{" "}
-                    {liveDebate.moderator.lastName}
-                  </p>
 
-                  <div className="mt-4 flex flex-wrap gap-2">
+                  <div className="mt-4">
                     <Button
-                      href="/debats"
+                      href={`/debats/${debat.id}/direct`}
                       size="sm"
                       variant="secondary"
                       icon={<Radio className="size-3.5" />}
                     >
-                      Rejoindre
-                    </Button>
-                    <Button
-                      href="/debats"
-                      size="sm"
-                      className="border-[1.5px] border-white/25 bg-transparent text-white hover:bg-white/10"
-                    >
-                      Clôturer
+                      Gérer le direct
                     </Button>
                   </div>
                 </article>
-              )}
+              ))}
 
-              {openConsultations.map((consultation, index) => {
-                const thematic = getThematic(consultation.thematicIds[0]);
-                const accent = thematic
-                  ? `var(--color-${thematic.color})`
-                  : "var(--color-primary)";
+              {ouvertes.map((consultation) => (
+                <article
+                  key={consultation.id}
+                  className="relative overflow-hidden rounded-lg bg-surface-raised p-4 ring-1 ring-hairline"
+                >
+                  <span
+                    className="absolute inset-y-0 left-0 w-[3px] bg-[var(--color-primary)]"
+                    aria-hidden
+                  />
 
-                return (
-                  <article
-                    key={consultation.id}
-                    className="relative overflow-hidden rounded-lg bg-surface-raised p-4 ring-1 ring-hairline"
-                  >
-                    <span
-                      className="absolute inset-y-0 left-0 w-[3px]"
-                      style={{ backgroundColor: accent }}
-                      aria-hidden
-                    />
-
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        {thematic && (
-                          <span
-                            className="text-[11px] font-bold uppercase tracking-[0.08em]"
-                            style={{ color: accent }}
-                          >
-                            {thematic.label}
-                          </span>
-                        )}
-                        <h3 className="mt-1 text-[15px] font-semibold leading-snug text-ink">
-                          {consultation.title}
-                        </h3>
-                      </div>
-
-                      <span className="tabular shrink-0 rounded-md bg-primary-pale px-2 py-1 text-[12px] font-bold text-primary">
-                        {formatDeadline(consultation.closesAt)}
-                      </span>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <h3 className="text-[15px] font-semibold leading-snug text-ink">
+                        {consultation.titre}
+                      </h3>
+                      <p className="mt-1 line-clamp-1 text-[13px] text-ink-subtle">
+                        {consultation.resumeVulgarise}
+                      </p>
                     </div>
 
-                    <ProgressBar
-                      value={consultation.participationRate}
-                      label={`${formatNumber(consultation.participants)} participants engagés`}
-                      color={accent}
-                      delay={200 + index * 120}
-                      className="mt-3"
-                    />
-                  </article>
-                );
-              })}
+                    <span className="tabular shrink-0 rounded-md bg-primary-pale px-2 py-1 text-[12px] font-bold text-primary">
+                      {formatDeadline(consultation.dateCloture)}
+                    </span>
+                  </div>
+                </article>
+              ))}
+
+              {enDirect.length === 0 && ouvertes.length === 0 && (
+                <p className="rounded-lg bg-surface-raised p-4 text-center text-[14px] text-ink-muted">
+                  Aucun direct ni consultation en cours — tout se lance depuis
+                  la page Débats.
+                </p>
+              )}
             </div>
           </Card>
 
@@ -256,9 +237,9 @@ export default async function DashboardPage() {
             />
 
             <ul className="mt-5 space-y-2">
-              {summaries.map((summary) => (
+              {resumes.map((resume) => (
                 <li
-                  key={summary.id}
+                  key={resume.id}
                   className="group flex flex-wrap items-center gap-3 rounded-lg p-3 transition-colors duration-150 hover:bg-secondary-pale"
                 >
                   <span className="grid size-9 shrink-0 place-items-center rounded-md bg-secondary/15">
@@ -267,22 +248,32 @@ export default async function DashboardPage() {
 
                   <div className="min-w-0 flex-1">
                     <p className="text-[14px] font-semibold text-ink">
-                      {summary.title}
+                      {resume.contexte}
                     </p>
                     <p className="mt-0.5 line-clamp-1 text-[13px] text-ink-subtle">
-                      {summary.excerpt}
+                      {resume.texteGenereIA}
                     </p>
                   </div>
 
                   <span className="hidden shrink-0 text-[12px] text-ink-subtle sm:block">
-                    {formatRelative(summary.generatedAt)}
+                    {formatRelative(resume.dateGeneration)}
                   </span>
 
-                  <Button size="sm" variant="secondary">
+                  <Button
+                    href="/moderation?onglet=resumes"
+                    size="sm"
+                    variant="secondary"
+                  >
                     Valider
                   </Button>
                 </li>
               ))}
+
+              {resumes.length === 0 && (
+                <li className="rounded-lg bg-surface-raised p-4 text-center text-[14px] text-ink-muted">
+                  Aucun résumé en attente — les débats terminés sont à jour.
+                </li>
+              )}
             </ul>
           </Card>
         </div>

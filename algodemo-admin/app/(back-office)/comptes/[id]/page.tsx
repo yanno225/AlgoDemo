@@ -2,204 +2,394 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import {
   ArrowLeft,
-  Mail,
-  Phone,
-  CalendarDays,
   BadgeCheck,
   BadgeX,
+  CalendarDays,
+  CircleAlert,
+  KeyRound,
   Lock,
+  Mail,
+  Phone,
+  ShieldCheck,
+  ShieldOff,
 } from "lucide-react";
-import { getAccount } from "@/lib/data/accounts";
-import { ROLES, ROLE_LABELS } from "@/lib/domain/roles";
+import { getCompte, getHistorique, getStatistiques } from "@/lib/data/comptes";
+import {
+  bloquerCompte,
+  changerRole,
+  validerCompte,
+} from "@/lib/data/comptes-actions";
+import { getSession } from "@/lib/auth/session";
+import { ROLES, ROLE_LABELS, type UserRole } from "@/lib/domain/roles";
 import { formatDate } from "@/lib/format";
 import { Card, CardHeader } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Avatar } from "@/components/ui/Avatar";
-import { CountUp } from "@/components/ui/CountUp";
+import { cn } from "@/lib/cn";
 
 export default async function CompteDetailPage({
   params,
 }: {
+  // Next 16 : `params` est asynchrone.
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const account = await getAccount(id);
+  const [compte, moi, stats, historique] = await Promise.all([
+    getCompte(id),
+    getSession(),
+    getStatistiques(id),
+    getHistorique(id),
+  ]);
 
-  if (!account) notFound();
+  if (!compte) notFound();
 
-  const isCertified = account.role === ROLES.POINT_FOCAL;
-  const isAdmin = account.role === ROLES.ADMIN_LABO;
+  // Compteurs réellement calculés en base : chaque avis, vote et participation
+  // porte l'identifiant de son auteur.
+  const activite = [
+    { libelle: "Avis déposés", valeur: stats.avisDeposes },
+    { libelle: "dont approuvés", valeur: stats.avisApprouves, secondaire: true },
+    { libelle: "Votes en consultation", valeur: stats.votesConsultations },
+    { libelle: "Débats rejoints", valeur: stats.debatsRejoints },
+    { libelle: "Votes en débat", valeur: stats.votesDebats },
+    { libelle: "Prises de parole", valeur: stats.prisesDeParole },
+    { libelle: "Signalements émis", valeur: stats.signalementsEmis },
+  ];
 
-  const stats = [
-    { label: "Avis déposés", value: account.activity.contributions },
-    { label: "Votes", value: account.activity.votes },
-    { label: "Débats", value: account.activity.debates },
+  // Un administrateur ne peut ni se bloquer, ni se retirer ses propres droits :
+  // il se couperait l'accès sans recours.
+  const estMonCompte = compte.id === moi?.id;
+
+  const etats = [
+    {
+      libelle: "Email vérifié",
+      actif: compte.emailVerifie,
+      detail: "L'adresse a été confirmée par un code.",
+    },
+    {
+      libelle: "Compte validé",
+      actif: compte.compteValide,
+      detail: "Validation administrative requise pour participer.",
+    },
+    {
+      libelle: "Double facteur",
+      actif: compte.deuxFaActif,
+      detail: "Obligatoire pour voter aux consultations.",
+    },
+    {
+      libelle: "Protocole accepté",
+      actif: Boolean(compte.politiqueConfidentialiteAccepteeLe),
+      detail: compte.politiqueConfidentialiteAccepteeLe
+        ? formatDate(compte.politiqueConfidentialiteAccepteeLe)
+        : "Politique de confidentialité pas encore acceptée.",
+    },
   ];
 
   return (
     <>
       <Link
         href="/comptes"
-        className="mb-4 inline-flex items-center gap-2 text-[14px] font-medium text-ink-muted transition-colors hover:text-primary"
+        className="mb-5 inline-flex items-center gap-2 text-[13px] font-medium text-ink-muted transition-colors hover:text-primary"
       >
-        <ArrowLeft className="size-4" aria-hidden />
+        <ArrowLeft className="size-3.5" aria-hidden />
         Retour aux comptes
       </Link>
 
-      <div className="grid gap-5 lg:grid-cols-3">
-        {/* ─── Identité ────────────────────────────────────────────── */}
-        <Card className="h-fit text-center">
-          <div className="flex flex-col items-center">
-            <Avatar
-              firstName={account.firstName}
-              lastName={account.lastName}
-              size="lg"
-              anonymised={account.isAnonymised}
-            />
-
-            <h1 className="mt-3 font-heading text-[20px] font-bold text-ink">
-              {account.firstName} {account.lastName}
-            </h1>
-
-            <Badge
-              tone={isAdmin ? "brand" : isCertified ? "warning" : "neutral"}
-              className="mt-2"
-            >
-              {ROLE_LABELS[account.role]}
-            </Badge>
-          </div>
-
-          {account.isAnonymised ? (
-            <p className="mt-5 flex items-start gap-2 rounded-lg bg-surface-raised p-3 text-left text-[13px] leading-relaxed text-ink-muted">
-              <Lock className="mt-0.5 size-3.5 shrink-0" aria-hidden />
-              Les données personnelles de ce compte sont chiffrées et ne sont
-              pas lisibles par l&apos;administration (RG-USR-07).
-            </p>
-          ) : (
-            <dl className="mt-5 space-y-3 text-left">
-              <div className="flex items-center gap-3">
-                <Mail className="size-4 shrink-0 text-ink-subtle" aria-hidden />
-                <div className="min-w-0">
-                  <dt className="text-[11px] font-bold uppercase tracking-wide text-ink-subtle">
-                    Email
-                  </dt>
-                  <dd className="truncate font-mono text-[13px] text-ink">{account.email}</dd>
-                </div>
-              </div>
-
-              {account.phone && (
-                <div className="flex items-center gap-3">
-                  <Phone className="size-4 shrink-0 text-ink-subtle" aria-hidden />
-                  <div className="min-w-0">
-                    <dt className="text-[11px] font-bold uppercase tracking-wide text-ink-subtle">
-                      Téléphone
-                    </dt>
-                    <dd className="text-[14px] text-ink">{account.phone}</dd>
-                  </div>
-                </div>
-              )}
-
-              <div className="flex items-center gap-3">
-                <CalendarDays className="size-4 shrink-0 text-ink-subtle" aria-hidden />
-                <div className="min-w-0">
-                  <dt className="text-[11px] font-bold uppercase tracking-wide text-ink-subtle">
-                    Inscrit le
-                  </dt>
-                  <dd className="text-[14px] text-ink">
-                    {formatDate(account.createdAt)}
-                  </dd>
-                </div>
-              </div>
-            </dl>
-          )}
-
-          {/* TODO(backend) : POST /admin/accounts/:id/certify | /revoke */}
-          {!isAdmin && (
-            <Button
-              variant="outline"
-              className={
-                isCertified
-                  ? "mt-5 w-full border-danger text-danger hover:bg-danger-pale"
-                  : "mt-5 w-full"
-              }
-              icon={
-                isCertified ? (
-                  <BadgeX className="size-4" />
-                ) : (
-                  <BadgeCheck className="size-4" />
-                )
-              }
-            >
-              {isCertified ? "Révoquer la certification" : "Certifier ce compte"}
-            </Button>
-          )}
-        </Card>
-
+      <div className="grid items-start gap-5 lg:grid-cols-3">
+        {/* ─── Identité et état ────────────────────────────────────── */}
         <div className="space-y-5 lg:col-span-2">
-          {/* ─── Contributions ─────────────────────────────────────── */}
+          <Card>
+            <div className="flex flex-wrap items-start gap-4">
+              <Avatar
+                firstName={compte.prenom}
+                lastName={compte.nom}
+                size="lg"
+                anonymised={compte.anonymise}
+              />
+
+              <div className="min-w-0 flex-1">
+                <h1 className="flex items-center gap-2 font-heading text-[24px] font-bold leading-tight text-ink">
+                  {compte.prenom} {compte.nom}
+                  {compte.anonymise && (
+                    <Lock className="size-4 text-ink-subtle" aria-hidden />
+                  )}
+                </h1>
+
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <Badge
+                    tone={
+                      compte.role === ROLES.ADMIN_LABO
+                        ? "brand"
+                        : compte.role === ROLES.POINT_FOCAL
+                          ? "warning"
+                          : "neutral"
+                    }
+                  >
+                    {ROLE_LABELS[compte.role]}
+                  </Badge>
+                  {compte.estBloque && <Badge tone="danger" dot>Bloqué</Badge>}
+                  {!compte.estBloque && !compte.compteValide && (
+                    <Badge tone="warning" dot>En attente de validation</Badge>
+                  )}
+                  {!compte.estBloque && compte.compteValide && (
+                    <Badge tone="success" dot>Actif</Badge>
+                  )}
+                </div>
+
+                <dl className="mt-4 space-y-1.5 text-[13px]">
+                  <div className="flex items-center gap-2">
+                    <Mail className="size-3.5 shrink-0 text-ink-subtle" aria-hidden />
+                    <dd className="min-w-0 break-all font-mono text-ink-muted">
+                      {compte.email}
+                    </dd>
+                  </div>
+                  {compte.telephone && (
+                    <div className="flex items-center gap-2">
+                      <Phone className="size-3.5 shrink-0 text-ink-subtle" aria-hidden />
+                      <dd className="font-mono text-ink-muted">{compte.telephone}</dd>
+                    </div>
+                  )}
+                  <div className="flex items-center gap-2">
+                    <CalendarDays className="size-3.5 shrink-0 text-ink-subtle" aria-hidden />
+                    <dd className="text-ink-muted">
+                      Inscrit le {formatDate(compte.creeLe)}
+                    </dd>
+                  </div>
+                </dl>
+              </div>
+            </div>
+
+            {compte.anonymise && (
+              <p className="mt-5 flex items-start gap-2 rounded-lg bg-surface-raised p-3 text-[13px] leading-relaxed text-ink-muted">
+                <Lock className="mt-0.5 size-3.5 shrink-0" aria-hidden />
+                Ce compte a été anonymisé à la demande de son titulaire
+                (RG-USR-07). Les données personnelles ne sont plus lisibles par
+                l&apos;administration.
+              </p>
+            )}
+          </Card>
+
+          {/* Activité réellement enregistrée : chaque avis, vote et
+              participation porte l'identifiant de son auteur en base. */}
           <Card>
             <CardHeader
-              title="Contributions"
-              description="Activité citoyenne agrégée. Le détail nominatif des votes n'est jamais exposé (RG-CON-05)."
+              title="Activité citoyenne"
+              description="Compteurs calculés à partir des actions réellement enregistrées."
             />
-
-            <dl className="mt-5 grid grid-cols-3 gap-3">
-              {stats.map((stat) => (
+            <dl className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
+              {activite.map((item) => (
                 <div
-                  key={stat.label}
-                  className="rounded-lg bg-surface-raised p-4 text-center ring-1 ring-hairline"
+                  key={item.libelle}
+                  className={cn(
+                    "rounded-lg p-3",
+                    item.secondaire ? "bg-primary-pale" : "bg-surface-raised",
+                  )}
                 >
-                  <dd className="tabular font-heading text-[36px] font-extrabold leading-none text-primary">
-                    <CountUp value={stat.value} />
+                  <dd
+                    className={cn(
+                      "font-heading text-[24px] font-bold tabular",
+                      item.valeur > 0 ? "text-primary" : "text-ink-subtle",
+                    )}
+                  >
+                    {item.valeur}
                   </dd>
-                  <dt className="mt-2 text-[12px] font-medium text-ink-muted">
-                    {stat.label}
+                  <dt className="mt-0.5 text-[12px] leading-snug text-ink-muted">
+                    {item.libelle}
                   </dt>
                 </div>
               ))}
             </dl>
           </Card>
 
-          {/* ─── Historique du rôle ────────────────────────────────── */}
+          {/* Traçabilité des décisions : c'est ce qui rend une certification
+              opposable — qui l'a accordée, quand, et depuis quel rôle. */}
           <Card>
             <CardHeader
-              title="Historique du rôle"
-              description="Chaque changement de rôle est horodaté et attribué à son auteur."
+              title="Décisions administratives"
+              description="Journal en ajout seul : aucune ligne n'est modifiable."
             />
+            {historique.length > 0 ? (
+              <ol className="mt-4 space-y-2">
+                {historique.map((decision) => (
+                  <li
+                    key={decision.id}
+                    className="flex items-start gap-3 rounded-lg bg-surface-raised p-3"
+                  >
+                    <span className="mt-1 grid size-6 shrink-0 place-items-center rounded-full bg-primary-pale">
+                      {decision.type === "ROLE" ? (
+                        <KeyRound className="size-3 text-primary" aria-hidden />
+                      ) : decision.type === "BLOCAGE" ? (
+                        <ShieldOff className="size-3 text-primary" aria-hidden />
+                      ) : (
+                        <ShieldCheck className="size-3 text-primary" aria-hidden />
+                      )}
+                    </span>
+                    <div className="min-w-0">
+                      <p className="text-[14px] font-semibold text-ink">
+                        {decision.type === "ROLE"
+                          ? `Rôle : ${decision.ancienRole ? ROLE_LABELS[decision.ancienRole] : "—"} → ${decision.nouveauRole ? ROLE_LABELS[decision.nouveauRole] : "—"}`
+                          : decision.type === "VALIDATION"
+                            ? decision.actif
+                              ? "Compte validé"
+                              : "Validation retirée"
+                            : decision.actif
+                              ? "Accès bloqué"
+                              : "Accès rétabli"}
+                      </p>
+                      <p className="mt-0.5 text-[12px] text-ink-subtle">
+                        {formatDate(decision.decideLe)}
+                      </p>
+                    </div>
+                  </li>
+                ))}
+              </ol>
+            ) : (
+              <p className="mt-4 rounded-lg bg-surface-raised p-4 text-[14px] leading-relaxed text-ink-muted">
+                Aucune décision administrative n&apos;a encore été prise sur ce
+                compte.
+              </p>
+            )}
+          </Card>
 
-            <ol className="mt-5 space-y-4">
-              {account.roleHistory.map((event, index) => (
-                <li key={event.id} className="relative flex gap-3 pb-4 last:pb-0">
-                  {index < account.roleHistory.length - 1 && (
-                    <span
-                      className="absolute left-[5px] top-4 h-full w-px bg-line-soft"
+          <Card>
+            <CardHeader
+              title="État du compte"
+              description="Conditions nécessaires à une participation complète."
+            />
+            <ul className="mt-4 grid gap-3 sm:grid-cols-2">
+              {etats.map((etat) => (
+                <li
+                  key={etat.libelle}
+                  className="flex items-start gap-2.5 rounded-lg bg-surface-raised p-3"
+                >
+                  {etat.actif ? (
+                    <BadgeCheck
+                      className="mt-0.5 size-4 shrink-0 text-success"
+                      aria-hidden
+                    />
+                  ) : (
+                    <BadgeX
+                      className="mt-0.5 size-4 shrink-0 text-ink-subtle"
                       aria-hidden
                     />
                   )}
-                  <span
-                    className={`mt-1.5 size-2.5 shrink-0 rounded-full ring-4 ${
-                      event.type === "certified"
-                        ? "bg-success ring-success/15"
-                        : event.type === "revoked"
-                          ? "bg-danger ring-danger/15"
-                          : "bg-ink-subtle ring-line-soft"
-                    }`}
-                  />
                   <div className="min-w-0">
-                    <p className="text-[14px] font-medium text-ink">
-                      {event.label}
-                      {event.by && (
-                        <span className="font-normal text-ink-muted"> par {event.by}</span>
+                    <p
+                      className={cn(
+                        "text-[14px] font-semibold",
+                        etat.actif ? "text-ink" : "text-ink-muted",
                       )}
+                    >
+                      {etat.libelle}
                     </p>
-                    <p className="mt-0.5 text-[12px] text-ink-subtle">
-                      {formatDate(event.at)}
+                    <p className="mt-0.5 text-[12px] leading-relaxed text-ink-subtle">
+                      {etat.detail}
                     </p>
                   </div>
                 </li>
               ))}
-            </ol>
+            </ul>
+          </Card>
+        </div>
+
+        {/* ─── Actions ─────────────────────────────────────────────── */}
+        <div className="space-y-5">
+          <Card>
+            <CardHeader
+              title="Actions"
+              description="Chaque décision est enregistrée dans le journal d'audit."
+            />
+
+            {estMonCompte && (
+              <p className="mt-4 flex items-start gap-2 rounded-lg bg-secondary-pale p-3 text-[13px] leading-relaxed text-ink-muted">
+                <CircleAlert className="mt-0.5 size-3.5 shrink-0 text-secondary" aria-hidden />
+                Il s&apos;agit de votre propre compte : le blocage et le retrait
+                de rôle sont désactivés.
+              </p>
+            )}
+
+            <div className="mt-4 space-y-2">
+              <form action={validerCompte}>
+                <input type="hidden" name="id" value={compte.id} />
+                <input
+                  type="hidden"
+                  name="valide"
+                  value={String(!compte.compteValide)}
+                />
+                <Button
+                  type="submit"
+                  variant={compte.compteValide ? "outline" : "primary"}
+                  className="w-full"
+                  icon={<ShieldCheck className="size-3.5" />}
+                >
+                  {compte.compteValide ? "Retirer la validation" : "Valider le compte"}
+                </Button>
+              </form>
+
+              <form action={bloquerCompte}>
+                <input type="hidden" name="id" value={compte.id} />
+                <input
+                  type="hidden"
+                  name="bloque"
+                  value={String(!compte.estBloque)}
+                />
+                <Button
+                  type="submit"
+                  variant="outline"
+                  disabled={estMonCompte}
+                  className={cn(
+                    "w-full",
+                    !compte.estBloque && "border-danger text-danger hover:bg-danger-pale",
+                  )}
+                  icon={<ShieldOff className="size-3.5" />}
+                >
+                  {compte.estBloque ? "Débloquer l'accès" : "Bloquer l'accès"}
+                </Button>
+              </form>
+            </div>
+          </Card>
+
+          <Card>
+            <CardHeader
+              title="Rôle"
+              description="La certification d'un point focal engage le Laboratoire."
+            />
+
+            <div className="mt-4 space-y-2">
+              {(Object.values(ROLES) as UserRole[]).map((role) => {
+                const actuel = role === compte.role;
+                const interdit = estMonCompte && role !== ROLES.ADMIN_LABO;
+
+                return (
+                  <form key={role} action={changerRole}>
+                    <input type="hidden" name="id" value={compte.id} />
+                    <input type="hidden" name="role" value={role} />
+                    <button
+                      type="submit"
+                      disabled={actuel || interdit}
+                      className={cn(
+                        "flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-left",
+                        "text-[14px] ring-1 transition-all duration-150",
+                        actuel
+                          ? "bg-primary-pale font-semibold text-primary ring-primary/30"
+                          : "bg-surface ring-hairline hover:-translate-y-px hover:shadow-sm hover:ring-primary/25",
+                        interdit && "cursor-not-allowed opacity-50 hover:translate-y-0 hover:shadow-none",
+                      )}
+                    >
+                      <span className="flex items-center gap-2">
+                        <KeyRound className="size-3.5 shrink-0" aria-hidden />
+                        {ROLE_LABELS[role]}
+                      </span>
+                      {actuel && (
+                        <span className="shrink-0 text-[11px] font-semibold uppercase tracking-wider">
+                          Actuel
+                        </span>
+                      )}
+                    </button>
+                  </form>
+                );
+              })}
+            </div>
           </Card>
         </div>
       </div>

@@ -1,39 +1,58 @@
 "use client";
 
-import { useState } from "react";
-import { Mail, ArrowRight, CircleAlert } from "lucide-react";
+import { useActionState, useState } from "react";
+import { Mail, ArrowRight, CircleAlert, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/Button";
+import { OtpInput } from "./OtpInput";
 import { PasswordInput } from "./PasswordInput";
 import { cn } from "@/lib/cn";
+import {
+  ETAT_CONNEXION_INITIAL,
+  type EtatConnexion,
+} from "@/lib/auth/etat-connexion";
 
 /**
- * Comptes de démonstration proposés au pré-remplissage.
+ * Compte d'amorçage créé par `npm run seed` côté backend.
  *
- * TODO(backend) : bloc entier à retirer au branchement de l'authentification.
+ * ⚠️ À retirer avant la mise en production : aucun identifiant ne doit
+ * subsister dans le livrable final.
  */
 const DEMO_ACCOUNTS = [
-  { email: "admin@algodemo.org", role: "Administrateur" },
-  { email: "focal@algodemo.org", role: "Point focal" },
+  { email: "admin@algodemo.local", role: "Administrateur (dev)" },
 ];
 
-const MIN_PASSWORD_LENGTH = 4;
+/** Aligné sur la règle du backend : 8 caractères minimum. */
+const MIN_PASSWORD_LENGTH = 8;
 
 interface LoginFormProps {
-  /** Action serveur de connexion. */
-  action: (formData: FormData) => Promise<void>;
+  /** Action serveur de connexion (signature `useActionState`). */
+  action: (
+    etatPrecedent: EtatConnexion,
+    formData: FormData,
+  ) => Promise<EtatConnexion>;
 }
 
 /**
- * Formulaire de connexion.
+ * Formulaire de connexion, en une seule étape.
+ *
+ * Quand le compte est protégé par un second facteur, le champ du code TOTP
+ * apparaît ici même : le mot de passe déjà saisi reste dans le formulaire, ce
+ * qui évite de le conserver côté serveur entre les deux temps de la connexion.
  *
  * La validation est faite au moment de la soumission puis maintenue à jour à
  * la frappe : signaler une erreur avant que l'utilisateur ait fini d'écrire
  * revient à le corriger pendant qu'il parle.
  */
 export function LoginForm({ action }: LoginFormProps) {
+  const [etat, executer, enCours] = useActionState(
+    action,
+    ETAT_CONNEXION_INITIAL,
+  );
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [submitted, setSubmitted] = useState(false);
+
+  const codeRequis = etat.statut === "code_requis";
 
   const emailError =
     submitted && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)
@@ -49,7 +68,7 @@ export function LoginForm({ action }: LoginFormProps) {
 
   return (
     <form
-      action={action}
+      action={executer}
       onSubmit={(event) => {
         setSubmitted(true);
         // La validation navigateur ne suffit pas : elle laisserait passer une
@@ -64,6 +83,22 @@ export function LoginForm({ action }: LoginFormProps) {
       noValidate
       className="space-y-5"
     >
+      {/* Message renvoyé par le serveur : identifiants refusés, code erroné,
+          API injoignable ou compte sans accès au back-office. */}
+      {etat.statut === "erreur" && (
+        <div
+          role="alert"
+          className="flex items-start gap-3 rounded-lg bg-danger-pale p-4"
+        >
+          <CircleAlert
+            className="mt-0.5 size-[18px] shrink-0 text-danger"
+            aria-hidden
+          />
+          <p className="text-[14px] leading-relaxed text-danger">
+            {etat.message}
+          </p>
+        </div>
+      )}
       <div>
         <label
           htmlFor="identifiant"
@@ -129,6 +164,40 @@ export function LoginForm({ action }: LoginFormProps) {
         {passwordError && <FieldError id="erreur-motdepasse">{passwordError}</FieldError>}
       </div>
 
+      {/* ─── Second facteur ───────────────────────────────────────────
+          N'apparaît que si le compte est réellement protégé par TOTP : le
+          code est vérifié par l'API, jamais côté navigateur. */}
+      {codeRequis && (
+        <div className="rounded-xl bg-primary-pale p-4 ring-1 ring-primary/15">
+          <p className="flex items-center gap-2 text-[13px] font-bold text-primary">
+            <ShieldCheck className="size-4 shrink-0" aria-hidden />
+            Vérification en deux étapes
+          </p>
+          <p className="mt-1 text-[13px] leading-relaxed text-ink-muted">
+            Saisissez le code à 6 chiffres envoyé à votre adresse email — ou
+            celui de votre application d&apos;authentification si vous avez
+            activé la double authentification.
+          </p>
+
+          <div className="mt-4" aria-labelledby="code-label">
+            <p id="code-label" className="sr-only">
+              Code à 6 chiffres
+            </p>
+            <OtpInput name="code" length={6} />
+          </div>
+
+          {etat.message && (
+            <p
+              role="alert"
+              className="mt-3 flex items-center gap-1.5 text-[13px] font-medium text-danger"
+            >
+              <CircleAlert className="size-3.5 shrink-0" aria-hidden />
+              {etat.message}
+            </p>
+          )}
+        </div>
+      )}
+
       <label className="flex cursor-pointer items-center gap-2.5 text-[14px] text-ink-muted">
         <input
           type="checkbox"
@@ -142,10 +211,15 @@ export function LoginForm({ action }: LoginFormProps) {
         type="submit"
         size="lg"
         className="w-full"
+        disabled={enCours}
         icon={<ArrowRight className="size-4" />}
         iconPosition="right"
       >
-        Se connecter
+        {enCours
+          ? "Vérification…"
+          : codeRequis
+            ? "Valider le code"
+            : "Se connecter"}
       </Button>
 
       {/* ─── Comptes de démonstration ─────────────────────────────── */}
@@ -183,8 +257,9 @@ export function LoginForm({ action }: LoginFormProps) {
         </ul>
 
         <p className="mt-3 text-[12px] leading-relaxed text-ink-subtle">
-          Cliquez un compte pour le pré-remplir. Mot de passe : n&apos;importe
-          quelle valeur d&apos;au moins {MIN_PASSWORD_LENGTH} caractères.
+          Cliquez un compte pour le pré-remplir. Le mot de passe est vérifié
+          par l&apos;API — celui du compte d&apos;amorçage est créé par{" "}
+          <span className="font-mono">npm run seed</span>.
         </p>
       </div>
 

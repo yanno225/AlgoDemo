@@ -20,11 +20,11 @@ export default async function BackOfficeLayout({
   const [user, session] = await Promise.all([getSession(), readSession()]);
 
   if (!user) {
-    // Une session entamée mais incomplète est renvoyée vers l'étape qui
-    // manque, plutôt que vers le début : refaire une 2FA déjà validée
-    // n'apporte aucune sécurité et agace l'utilisateur.
-    if (session?.stage === "credentials") redirect("/connexion/verification");
-    if (session?.stage === "verified") redirect("/connexion/protocole");
+    // Une session authentifiée mais qui n'a pas encore accepté le protocole
+    // reprend à cette étape, plutôt qu'au début : la connexion est acquise.
+    if (session?.stage === "verified" && session.accessToken) {
+      redirect("/connexion/protocole");
+    }
     redirect("/connexion");
   }
 

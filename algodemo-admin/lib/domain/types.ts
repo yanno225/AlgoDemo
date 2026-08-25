@@ -30,111 +30,16 @@ export interface AdminUser {
   isAnonymised?: boolean;
 }
 
-/** Compteurs d'activité citoyenne affichés sur une fiche compte. */
-export interface AccountActivity {
-  contributions: number;
-  votes: number;
-  debates: number;
-}
-
-export type RoleEventType = "created" | "certified" | "revoked";
-
-/** Trace d'un changement de rôle — exigence d'auditabilité. */
-export interface RoleEvent {
-  id: string;
-  type: RoleEventType;
-  label: string;
-  at: string;
-  by?: string;
-}
-
-export interface AccountDetail extends AdminUser {
-  activity: AccountActivity;
-  roleHistory: RoleEvent[];
-}
+// Les compteurs d'activité et l'historique des rôles ont été retirés : ils
+// n'existaient que dans la maquette. L'API n'expose pas ces données — voir
+// `CompteDetail` plus bas pour l'état réel d'un compte.
 
 // ─── Modération des avis ─────────────────────────────────────────────
-export type ModerationStatus = "new" | "in_progress" | "handled" | "rejected";
+// Les types maquette de modération (Contribution, Signalement enrichi,
+// théâtre de triangulation) ont été retirés : la couche réelle est typée
+// dans `lib/data/moderation.ts`, au plus près de l'API.
 
-export interface Contribution {
-  id: string;
-  author: Pick<AdminUser, "id" | "firstName" | "lastName">;
-  /** Consultation ou débat auquel se rattache l'avis. */
-  context: string;
-  thematicId: ThematicId;
-  body: string;
-  status: ModerationStatus;
-  submittedAt: string;
-}
-
-// ─── Signalements citoyens ───────────────────────────────────────────
-export interface SignalementHistoryEntry {
-  id: string;
-  label: string;
-  at: string;
-  by: string;
-}
-
-export interface Signalement {
-  id: string;
-  reference: string;
-  category: string;
-  /** Famille de signalement : voirie, nuisance, désinformation… */
-  tag: string;
-  description: string;
-  location: string;
-  photoUrl?: string;
-  status: ModerationStatus;
-  reporter: string;
-  reportedAt: string;
-  /** Note interne, jamais exposée au citoyen. */
-  internalNote?: string;
-  history: SignalementHistoryEntry[];
-}
-
-// ─── Vérification / triangulation (RG-FEED-01) ───────────────────────
-export type TriangulationOrigin = "ai" | "point_focal" | "investigation";
-
-export type TriangulationStepStatus =
-  | "success"
-  | "validated"
-  | "pending"
-  | "blocked";
-
-export interface TriangulationStep {
-  step: 1 | 2 | 3;
-  label: string;
-  status: TriangulationStepStatus;
-  detail: string;
-  by?: string;
-}
-
-export type VerificationPriority = "high" | "normal";
-
-export interface VerificationSource {
-  id: string;
-  label: string;
-  /** Nature de la source : gouvernementale, média indépendant, universitaire… */
-  kind: string;
-}
-
-export interface VerificationItem {
-  id: string;
-  reference: string;
-  title: string;
-  excerpt: string;
-  origin: TriangulationOrigin;
-  priority: VerificationPriority;
-  /** Synthèse de l'étape courante, telle qu'affichée sur la carte. */
-  headline: string;
-  summary: string;
-  postedAt: string;
-  shares: number;
-  sources: VerificationSource[];
-  steps: TriangulationStep[];
-}
-
-// ─── Débats et consultations ─────────────────────────────────────────
+// ─── Débats et consultations (encore mockés) ─────────────────────────
 export type DebateStatus = "live" | "scheduled" | "closed";
 
 export interface Speaker {
@@ -186,37 +91,10 @@ export interface AiSummary {
   excerpt: string;
 }
 
-// ─── Référentiel ─────────────────────────────────────────────────────
-export interface Indicator {
-  id: string;
-  code: string;
-  label: string;
-  description: string;
-  entries: IndicatorEntry[];
-}
-
-export interface IndicatorEntry {
-  id: string;
-  /** Valeur mesurée : pourcentage, ou libellé qualitatif (« Élevé »). */
-  value: string;
-  country: string;
-  recordedAt: string;
-  source: string;
-}
-
-export interface Criterion {
-  id: string;
-  label: string;
-  description: string;
-  indicators: Indicator[];
-}
-
-export interface ThematicReferential {
-  thematicId: ThematicId;
-  criteriaCount: number;
-  indicatorsCount: number;
-  criteria: Criterion[];
-}
+// Le référentiel (thématiques › critères › indicateurs) est typé dans
+// `lib/data/referentiel.ts`, au plus près de l'API qui le sert. Les anciens
+// types maquette (codes EGAL-01, descriptions, valeurs par pays inventées)
+// ont été retirés : l'API ne porte que des libellés.
 
 // ─── Activité et indicateurs de pilotage ─────────────────────────────
 export interface ActivityEvent {
@@ -232,4 +110,125 @@ export interface Paginated<T> {
   page: number;
   pageSize: number;
   total: number;
+}
+
+// ─── Comptes (branchés sur GET /auth/users) ──────────────────────────
+
+/**
+ * Compte tel que l'API le décrit réellement.
+ *
+ * `AdminUser` ci-dessus date de la phase mockée et réduisait l'état du compte
+ * à un seul booléen `isActive` ; l'API distingue en fait quatre états
+ * indépendants, qu'un back-office doit pouvoir lire et corriger séparément.
+ */
+export interface CompteDetail {
+  id: string;
+  email: string;
+  nom: string;
+  prenom: string;
+  telephone: string | null;
+  role: UserRole;
+  /** L'adresse email a été confirmée par un code. */
+  emailVerifie: boolean;
+  /** Le compte a été validé par un administrateur (§9.3). */
+  compteValide: boolean;
+  /** Accès suspendu par un administrateur. */
+  estBloque: boolean;
+  /** Second facteur TOTP activé — obligatoire pour voter aux consultations. */
+  deuxFaActif: boolean;
+  consentementNotifications: boolean;
+  politiqueConfidentialiteAccepteeLe: string | null;
+  /** Données personnelles effacées à la demande (RG-USR-07). */
+  anonymise: boolean;
+  creeLe: string;
+}
+
+/** Activité citoyenne d'un compte (GET /auth/users/:id/statistiques). */
+export interface StatistiquesCompte {
+  avisDeposes: number;
+  avisApprouves: number;
+  votesConsultations: number;
+  votesDebats: number;
+  debatsRejoints: number;
+  prisesDeParole: number;
+  signalementsEmis: number;
+}
+
+export type TypeDecision = "ROLE" | "VALIDATION" | "BLOCAGE";
+
+/**
+ * Décision administrative portée sur un compte
+ * (GET /auth/users/:id/historique). Journal en ajout seul.
+ */
+export interface DecisionCompte {
+  id: string;
+  userCibleId: string;
+  decideParUserId: string;
+  type: TypeDecision;
+  ancienRole: UserRole | null;
+  nouveauRole: UserRole | null;
+  actif: boolean | null;
+  decideLe: string;
+}
+
+// ─── Collecte / veille ───────────────────────────────────────────────
+// Ces types reprennent VOLONTAIREMENT les noms de champs français du
+// backend (module `collecte`) : ils sont consommés tels que sérialisés par
+// l'API, sans couche de traduction, contrairement aux types ci-dessus qui
+// datent de la phase mockée.
+
+export type StatutProposition = "EN_ATTENTE" | "VALIDEE" | "REJETEE";
+
+/** Valeur proposée par la collecte, en attente de validation humaine. */
+export interface PropositionValeur {
+  id: string;
+  indicateur: {
+    id: string;
+    libelle: string;
+    critere?: { libelle: string; thematique?: { libelle: string } };
+  };
+  valeur: number;
+  dateMesure: string;
+  paysOuZone: string;
+  source: string;
+  /** Citation verbatim justifiant le chiffre (extraction IA uniquement). */
+  extrait: string | null;
+  urlSource: string | null;
+  statut: StatutProposition;
+  collecteLe: string;
+}
+
+/** Un indicateur vu par plusieurs sources — cœur de la triangulation. */
+export interface LigneTriangulation {
+  indicateur: string;
+  critere: string;
+  thematique: string;
+  sources: {
+    source: string;
+    valeur: number;
+    annee: string;
+    statut: StatutProposition;
+    propositionId: string;
+  }[];
+  /** Vrai si ≥ 2 sources et écart max/min ≤ 10 % de la moyenne. */
+  concordance: boolean;
+  /** Nombre de sources distinctes = niveau de vérification. */
+  niveauVerification: number;
+}
+
+/** Source de la liste blanche : rien n'est ingéré en dehors. */
+export interface SourceAutorisee {
+  id: string;
+  libelle: string;
+  domaine: string | null;
+  description: string | null;
+  active: boolean;
+  creeLe: string;
+}
+
+/** Bilan renvoyé par un lancement de collecte. */
+export interface BilanCollecte {
+  parSource: { source: string; propositions: number }[];
+  propositionsCreees: number;
+  doublonsIgnores: number;
 }

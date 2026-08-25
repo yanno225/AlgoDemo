@@ -2,19 +2,28 @@
 
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { API_BASE_URL, ApiError, apiPublic } from "@/lib/api/client";
+import { BACK_OFFICE_ROLES, hasRole } from "@/lib/domain/roles";
+import type { EtatConnexion } from "./etat-connexion";
 import {
-  DEMO_ACCOUNTS,
   SESSION_COOKIE,
+  mapProfil,
   readSession,
+  type ProfilBackend,
   type Session,
 } from "./session";
 
 /**
- * Actions du parcours d'accès.
+ * Actions du parcours d'accès, branchées sur l'API NestJS.
  *
  * Le cookie est `httpOnly` : il reste inaccessible au JavaScript de la page,
  * ce qui neutralise le vol de session par injection de script. `sameSite:
- * lax` bloque son envoi depuis un site tiers.
+ * lax` bloque son envoi depuis un site tiers. Les jetons de l'API y sont
+ * stockés — ils ne transitent jamais par le navigateur en clair.
+ *
+ * Le mot de passe n'est JAMAIS conservé côté serveur, même entre les deux
+ * temps d'une connexion à double facteur : c'est le formulaire client qui le
+ * garde en mémoire le temps de saisir le code TOTP.
  */
 const COOKIE_OPTIONS = {
   httpOnly: true,
@@ -28,57 +37,133 @@ async function writeSession(session: Session) {
   (await cookies()).set(SESSION_COOKIE, JSON.stringify(session), COOKIE_OPTIONS);
 }
 
-/** Étape 1 — vérification des identifiants. */
-export async function signIn(formData: FormData) {
-  const email = String(formData.get("identifiant") ?? "").trim().toLowerCase();
-  const password = String(formData.get("motdepasse") ?? "");
-
-  // TODO(backend) : POST /auth/login. La vérification du mot de passe doit
-  // se faire côté serveur applicatif, jamais ici.
-  const account = DEMO_ACCOUNTS[email];
-
-  if (!account || password.length < 4) {
-    redirect("/connexion?erreur=identifiants");
-  }
-
-  await writeSession({ email, stage: "credentials" });
-  redirect("/connexion/verification");
+interface Jetons {
+  accessToken?: string;
+  refreshToken?: string;
+  /** Le backend répond ainsi quand la 2FA TOTP est activée sur le compte. */
+  deuxFaRequis?: boolean;
 }
 
-/** Étape 2 — code de vérification à usage unique. */
-export async function verifyCode(formData: FormData) {
-  const session = await readSession();
-  if (!session) redirect("/connexion");
+/**
+ * Profil associé à un access token tout juste délivré. On ne peut pas passer
+ * par `apiFetch` ici : le cookie de session n'est pas encore écrit.
+ * (Fonction interne — dans un fichier "use server", seuls les exports sont
+ * exposés comme Server Actions.)
+ */
+async function recupererProfil(
+  accessToken: string,
+): Promise<ProfilBackend | null> {
+  try {
+    const reponse = await fetch(`${API_BASE_URL}/auth/me`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+      cache: "no-store",
+    });
+    return reponse.ok ? ((await reponse.json()) as ProfilBackend) : null;
+  } catch {
+    return null;
+  }
+}
 
-  const code = String(formData.get("code") ?? "").replace(/\D/g, "");
+/**
+ * Connexion en un seul point d'entrée : mot de passe, puis code TOTP si le
+ * compte en exige un. Le second appel renvoie les trois champs d'un coup —
+ * c'est ce qu'attend `POST /auth/login`.
+ */
+export async function signIn(
+  _etatPrecedent: EtatConnexion,
+  formData: FormData,
+): Promise<EtatConnexion> {
+  const email = String(formData.get("identifiant") ?? "").trim().toLowerCase();
+  const motDePasse = String(formData.get("motdepasse") ?? "");
+  const codeOtp = String(formData.get("code") ?? "").replace(/\D/g, "");
 
-  // TODO(backend) : POST /auth/verify-2fa. Tout code à 6 chiffres est
-  // actuellement accepté, faute de service d'envoi.
-  if (code.length !== 6) {
-    redirect("/connexion/verification?erreur=code");
+  if (!email || !motDePasse) {
+    return { statut: "erreur", message: "Renseignez votre email et votre mot de passe." };
   }
 
-  await writeSession({ ...session, stage: "verified" });
+  let jetons: Jetons;
+  try {
+    jetons = await apiPublic<Jetons>("/auth/login", {
+      email,
+      motDePasse,
+      // Le DTO impose exactement 6 chiffres : on n'envoie le champ que
+      // lorsqu'il est complet, sinon la requête serait rejetée en 400.
+      ...(codeOtp.length === 6 ? { codeOtp } : {}),
+    });
+  } catch (erreur) {
+    if (erreur instanceof ApiError && erreur.statusCode === 401) {
+      return {
+        statut: codeOtp ? "code_requis" : "erreur",
+        message: codeOtp
+          ? "Code incorrect ou expiré. Un code TOTP change toutes les 30 secondes."
+          : "Identifiants incorrects. Vérifiez votre saisie.",
+      };
+    }
+    return {
+      statut: "erreur",
+      message:
+        "Le service d'authentification est injoignable. Vérifiez que l'API est démarrée, puis réessayez.",
+    };
+  }
+
+  // Double facteur activé : on redemande, en gardant le formulaire en place.
+  if (jetons.deuxFaRequis || !jetons.accessToken) {
+    return {
+      statut: "code_requis",
+      message: codeOtp
+        ? "Code incorrect ou expiré. Réessayez avec le code affiché maintenant."
+        : undefined,
+    };
+  }
+
+  // Le back-office est interdit aux citoyens : on refuse avant d'ouvrir la
+  // session, plutôt que de laisser la garde de section le faire plus tard.
+  const profil = await recupererProfil(jetons.accessToken);
+  if (!profil || !hasRole(mapProfil(profil).role, BACK_OFFICE_ROLES)) {
+    return {
+      statut: "erreur",
+      message:
+        "Votre compte n'a pas accès à l'administration. Les citoyens utilisent l'application mobile AlgoDémo.",
+    };
+  }
+
+  await writeSession({
+    email,
+    stage: "verified",
+    accessToken: jetons.accessToken,
+    refreshToken: jetons.refreshToken,
+    // Trace de la robustesse réelle de la session, affichée à l'étape suivante.
+    deuxFa: Boolean(profil.deuxFaActif),
+  });
   redirect("/connexion/protocole");
 }
 
-/** Étape 3 — acceptation du protocole de responsabilité (RG-USR-07). */
+/** Étape finale — acceptation du protocole de responsabilité (RG-USR-07). */
 export async function acceptProtocol(formData: FormData) {
   const session = await readSession();
-  if (!session) redirect("/connexion");
+  if (!session?.accessToken) redirect("/connexion");
 
   if (!formData.get("acceptation")) {
     redirect("/connexion/protocole?erreur=acceptation");
   }
 
   // TODO(backend) : POST /auth/accept-protocol — l'acceptation doit être
-  // horodatée et conservée, c'est une exigence de traçabilité.
+  // horodatée et conservée côté serveur, c'est une exigence de traçabilité.
   await writeSession({ ...session, stage: "active" });
   redirect("/");
 }
 
-/** Déconnexion — le cookie est détruit côté serveur. */
+/** Déconnexion — le refresh token est révoqué côté API, puis le cookie détruit. */
 export async function signOut() {
+  const session = await readSession();
+  if (session?.accessToken) {
+    try {
+      const { apiFetch } = await import("@/lib/api/client");
+      await apiFetch("/auth/logout", { methode: "POST" });
+    } catch {
+      // Jeton déjà expiré côté API : la déconnexion locale suffit.
+    }
+  }
   (await cookies()).delete(SESSION_COOKIE);
   redirect("/connexion");
 }

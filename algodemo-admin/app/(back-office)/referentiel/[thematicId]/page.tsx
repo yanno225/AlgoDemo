@@ -2,31 +2,40 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import {
   ArrowLeft,
-  Plus,
   ChevronDown,
-  Pencil,
-  Trash2,
-  Info,
   ChevronRight,
+  Info,
+  Pencil,
+  Plus,
+  Trash2,
 } from "lucide-react";
-import { getThematicReferential } from "@/lib/data/referential";
-import { getThematic } from "@/lib/domain/thematics";
+import { getThematique } from "@/lib/data/referentiel";
+import {
+  creerCritere,
+  creerIndicateur,
+  renommerCritere,
+  supprimerCritere,
+} from "@/lib/data/referentiel-actions";
+import { getThematicByLabel } from "@/lib/domain/thematics";
 import { Card } from "@/components/ui/Card";
-import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
+import { TextInput } from "@/components/ui/Field";
+import { PanneauAction } from "@/components/referentiel/PanneauAction";
 
-export default async function ThematicReferentialPage({
+export default async function ThematiqueDetailPage({
   params,
 }: {
+  // Next 16 : `params` est asynchrone.
   params: Promise<{ thematicId: string }>;
 }) {
   const { thematicId } = await params;
-  const [entry, thematic] = [
-    await getThematicReferential(thematicId),
-    getThematic(thematicId),
-  ];
+  const thematique = await getThematique(thematicId);
+  if (!thematique) notFound();
 
-  if (!entry || !thematic) notFound();
+  const habillage = getThematicByLabel(thematique.libelle);
+  const couleur = habillage
+    ? `var(--color-${habillage.color})`
+    : "var(--color-primary)";
 
   return (
     <>
@@ -38,143 +47,191 @@ export default async function ThematicReferentialPage({
         Retour au référentiel
       </Link>
 
-      <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <span
-            className="size-11 shrink-0 rounded-md"
-            style={{ backgroundColor: `var(--color-${thematic.color})` }}
-            aria-hidden
-          />
-          <div>
-            <p className="text-[12px] font-bold uppercase tracking-wide text-ink-subtle">
-              Thématique
+      <div className="mb-8 flex items-center gap-3">
+        <span
+          className="size-11 shrink-0 rounded-md ring-1 ring-black/5"
+          style={{ backgroundColor: couleur }}
+          aria-hidden
+        />
+        <div>
+          <p className="text-[12px] font-bold uppercase tracking-wide text-ink-subtle">
+            Thématique
+          </p>
+          <h1 className="font-heading text-[28px] font-bold leading-tight text-ink">
+            {thematique.libelle}
+          </h1>
+        </div>
+      </div>
+
+      <div className="grid items-start gap-5 lg:grid-cols-3">
+        <div className="space-y-4 lg:col-span-2">
+          {thematique.criteres.map((critere, index) => (
+            /* `<details>` natif : accordéon accessible au clavier et
+               fonctionnel sans JavaScript. */
+            <details
+              key={critere.id}
+              open={index === 0}
+              className="animate-rise group overflow-hidden rounded-xl bg-surface shadow-sm ring-1 ring-hairline"
+              style={{ animationDelay: `${index * 45}ms` }}
+            >
+              <summary className="flex cursor-pointer list-none items-center gap-3 p-5 transition-colors hover:bg-surface-raised [&::-webkit-details-marker]:hidden">
+                <span
+                  className="h-9 w-1 shrink-0 rounded-full"
+                  style={{ backgroundColor: couleur }}
+                  aria-hidden
+                />
+
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[15px] font-bold text-ink">
+                    {critere.libelle}
+                  </span>
+                  <span className="block text-[13px] text-ink-subtle">
+                    {critere.indicateurs.length} indicateur
+                    {critere.indicateurs.length > 1 ? "s" : ""} rattaché
+                    {critere.indicateurs.length > 1 ? "s" : ""}
+                  </span>
+                </span>
+
+                <ChevronDown
+                  className="size-4 shrink-0 text-ink-subtle transition-transform duration-200 group-open:rotate-180"
+                  aria-hidden
+                />
+              </summary>
+
+              <div className="border-t border-line-soft px-5 pb-5 pt-4">
+                {/* ─── Indicateurs ───────────────────────────────────
+                    Lignes = liens purs : renommage et suppression vivent
+                    sur la fiche de l'indicateur, avec tout son contexte
+                    (nombre de valeurs qui disparaîtraient). */}
+                <ul className="space-y-2">
+                  {critere.indicateurs.map((indicateur) => (
+                    <li key={indicateur.id}>
+                      <Link
+                        href={`/referentiel/indicateurs/${indicateur.id}`}
+                        className="group/ligne flex items-center gap-3 rounded-lg bg-surface-raised p-3 transition-all duration-150 hover:-translate-y-px hover:shadow-sm"
+                      >
+                        <span className="min-w-0 flex-1 text-[14px] font-medium text-ink group-hover/ligne:text-primary">
+                          {indicateur.libelle}
+                        </span>
+                        <ChevronRight
+                          className="size-4 shrink-0 text-ink-subtle transition-transform duration-150 group-hover/ligne:translate-x-0.5 group-hover/ligne:text-primary"
+                          aria-hidden
+                        />
+                      </Link>
+                    </li>
+                  ))}
+
+                  {critere.indicateurs.length === 0 && (
+                    <li className="rounded-lg bg-surface-raised p-4 text-center text-[13px] text-ink-muted">
+                      Aucun indicateur — ce critère n&apos;apparaît pas encore
+                      dans la fiche pays.
+                    </li>
+                  )}
+                </ul>
+
+                {/* ─── Ajouter un indicateur ────────────────────────── */}
+                <form action={creerIndicateur} className="mt-3 flex gap-2">
+                  <input type="hidden" name="critereId" value={critere.id} />
+                  <TextInput
+                    name="libelle"
+                    required
+                    maxLength={500}
+                    placeholder="Nouvel indicateur (ex. Taux d'accès à l'eau potable)"
+                    aria-label={`Nouvel indicateur du critère ${critere.libelle}`}
+                    className="h-10 flex-1 text-[13px]"
+                  />
+                  <Button type="submit" size="sm" className="h-10 shrink-0" icon={<Plus className="size-3.5" />}>
+                    Ajouter
+                  </Button>
+                </form>
+
+                {/* ─── Gestion du critère ───────────────────────────── */}
+                <div className="mt-4 flex flex-wrap items-start gap-2 border-t border-line-soft pt-3">
+                  <PanneauAction libelle="Renommer" icone={<Pencil className="size-3.5" aria-hidden />}>
+                    <form action={renommerCritere} className="flex gap-2">
+                      <input type="hidden" name="id" value={critere.id} />
+                      <TextInput
+                        name="libelle"
+                        required
+                        maxLength={255}
+                        defaultValue={critere.libelle}
+                        aria-label={`Nouveau libellé du critère ${critere.libelle}`}
+                        className="h-10 flex-1 text-[13px]"
+                      />
+                      <Button type="submit" size="sm" className="h-10 shrink-0">
+                        Renommer
+                      </Button>
+                    </form>
+                  </PanneauAction>
+
+                  <PanneauAction
+                    libelle="Supprimer"
+                    danger
+                    icone={<Trash2 className="size-3.5" aria-hidden />}
+                  >
+                    <p className="text-[13px] leading-relaxed text-ink-muted">
+                      Supprimer « {critere.libelle} » emporte{" "}
+                      <strong className="text-danger">
+                        {critere.indicateurs.length} indicateur
+                        {critere.indicateurs.length > 1 ? "s" : ""}
+                      </strong>{" "}
+                      et toutes leurs valeurs déjà publiées dans la fiche pays.
+                      Cette action est définitive.
+                    </p>
+                    <form action={supprimerCritere} className="mt-3">
+                      <input type="hidden" name="id" value={critere.id} />
+                      <Button
+                        type="submit"
+                        size="sm"
+                        variant="outline"
+                        className="border-danger text-danger hover:bg-danger-pale"
+                        icon={<Trash2 className="size-3.5" />}
+                      >
+                        Supprimer définitivement
+                      </Button>
+                    </form>
+                  </PanneauAction>
+                </div>
+              </div>
+            </details>
+          ))}
+
+          {/* ─── Nouveau critère ─────────────────────────────────────── */}
+          <div
+            className="animate-rise rounded-xl border-[1.5px] border-dashed border-line bg-surface/60 p-5"
+            style={{ animationDelay: `${thematique.criteres.length * 45}ms` }}
+          >
+            <p className="text-[13px] font-bold uppercase tracking-[0.08em] text-ink-muted">
+              Nouveau critère
             </p>
-            <h1 className="font-heading text-[28px] font-bold text-ink">
-              {thematic.label}
-            </h1>
+            <form action={creerCritere} className="mt-3 flex gap-2">
+              <input type="hidden" name="thematiqueId" value={thematique.id} />
+              <TextInput
+                name="libelle"
+                required
+                maxLength={255}
+                placeholder="Libellé du critère (ex. Accès aux services essentiels)"
+                aria-label="Libellé du nouveau critère"
+                className="h-11 flex-1"
+              />
+              <Button type="submit" className="h-11 shrink-0" icon={<Plus className="size-4" />}>
+                Créer
+              </Button>
+            </form>
           </div>
         </div>
 
-        <Button
-          href={`/referentiel/${thematicId}/criteres/nouveau`}
-          icon={<Plus className="size-4" />}
-        >
-          Ajouter un critère
-        </Button>
-      </div>
-
-      <div className="grid gap-5 lg:grid-cols-3">
-        <div className="space-y-4 lg:col-span-2">
-          {entry.criteria.length === 0 ? (
-            <Card>
-              <p className="py-8 text-center text-[14px] text-ink-muted">
-                Aucun critère n&apos;est encore défini pour cette thématique.
-              </p>
-            </Card>
-          ) : (
-            entry.criteria.map((criterion, index) => (
-              /* `<details>` natif : accordéon accessible au clavier et
-                 fonctionnel sans JavaScript. */
-              <details
-                key={criterion.id}
-                open={index === 0}
-                className="animate-rise group overflow-hidden rounded-xl bg-surface shadow-sm ring-1 ring-hairline"
-                style={{ animationDelay: `${index * 45}ms` }}
-              >
-                <summary className="flex cursor-pointer list-none items-center gap-3 p-6 transition-colors hover:bg-surface-raised">
-                  <span
-                    className="h-9 w-1 shrink-0 rounded-full"
-                    style={{ backgroundColor: `var(--color-${thematic.color})` }}
-                    aria-hidden
-                  />
-
-                  <span className="min-w-0 flex-1">
-                    <span className="block text-[15px] font-bold text-ink">
-                      {criterion.label}
-                    </span>
-                    <span className="block text-[13px] text-ink-subtle">
-                      {criterion.indicators.length} indicateur
-                      {criterion.indicators.length > 1 ? "s" : ""} rattaché
-                      {criterion.indicators.length > 1 ? "s" : ""}
-                    </span>
-                  </span>
-
-                  <ChevronDown
-                    className="size-4 shrink-0 text-ink-subtle transition-transform duration-200 group-open:rotate-180"
-                    aria-hidden
-                  />
-                </summary>
-
-                <div className="border-t border-line-soft px-6 pb-6 pt-4">
-                  <p className="mb-4 text-[14px] leading-relaxed text-ink-muted">
-                    {criterion.description}
-                  </p>
-
-                  <ul className="space-y-2">
-                    {criterion.indicators.map((indicator) => (
-                      <li key={indicator.id}>
-                        <div className="flex items-center gap-3 rounded-lg bg-surface-raised p-3">
-                          <Link
-                            href={`/referentiel/indicateurs/${indicator.id}`}
-                            className="group/link min-w-0 flex-1"
-                          >
-                            <span className="flex items-center gap-2">
-                              <Badge tone="neutral" className="font-mono">{indicator.code}</Badge>
-                            </span>
-                            <span className="mt-1 block text-[14px] font-medium text-ink group-hover/link:text-primary">
-                              {indicator.label}
-                            </span>
-                          </Link>
-
-                          {/* Actions discrètes : la suppression d'un critère
-                              entraîne celle de ses indicateurs. */}
-                          <button
-                            type="button"
-                            aria-label={`Modifier ${indicator.label}`}
-                            className="grid size-8 shrink-0 place-items-center rounded-md text-ink-subtle transition-colors hover:bg-surface hover:text-primary"
-                          >
-                            <Pencil className="size-3.5" aria-hidden />
-                          </button>
-                          <button
-                            type="button"
-                            aria-label={`Supprimer ${indicator.label}`}
-                            className="grid size-8 shrink-0 place-items-center rounded-md text-ink-subtle transition-colors hover:bg-danger-pale hover:text-danger"
-                          >
-                            <Trash2 className="size-3.5" aria-hidden />
-                          </button>
-
-                          <ChevronRight
-                            className="size-4 shrink-0 text-ink-subtle"
-                            aria-hidden
-                          />
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-
-                  <button
-                    type="button"
-                    className="mt-3 inline-flex h-9 w-full items-center justify-center gap-2 rounded-md border-[1.5px] border-dashed border-line text-[14px] font-medium text-ink-muted transition-colors hover:border-primary hover:text-primary"
-                  >
-                    <Plus className="size-3.5" aria-hidden />
-                    Ajouter un indicateur
-                  </button>
-                </div>
-              </details>
-            ))
-          )}
-        </div>
-
-        <Card className="h-fit bg-secondary-pale ring-1 ring-secondary/25">
+        <Card className="bg-secondary-pale ring-1 ring-secondary/25 lg:sticky lg:top-6">
           <div className="flex items-start gap-3">
             <Info className="mt-0.5 size-[18px] shrink-0 text-secondary" aria-hidden />
             <div>
               <p className="text-[15px] font-bold text-ink">Aide à la gestion</p>
               <p className="mt-1.5 text-[14px] leading-relaxed text-ink-muted">
-                Utilisez les icônes discrètes pour modifier ou supprimer un
-                élément. Toute suppression d&apos;un critère entraîne celle des
-                indicateurs qui lui sont rattachés, ainsi que des valeurs déjà
-                enregistrées.
+                Ces critères et indicateurs structurent la fiche pays et la
+                collecte : l&apos;IA ne peut rattacher une donnée qu&apos;à un
+                indicateur existant ici. Renommer un indicateur peut casser la
+                correspondance avec les connecteurs (Banque Mondiale, OMS) —
+                vérifiez les mappings après coup.
               </p>
             </div>
           </div>
