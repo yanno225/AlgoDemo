@@ -1,4 +1,5 @@
 import { apiClient } from './client';
+import { mediaUrl } from '../../constants/api';
 
 /**
  * Signalements citoyens de terrain — module backend `participation`.
@@ -69,7 +70,7 @@ function mapReport(backend: BackendSignalement): CitizenReport {
     categoryKey: CLE_PAR_CATEGORIE[backend.categorie] ?? 'other',
     description: backend.description,
     address: backend.adresse,
-    photoUrl: backend.urlPhoto,
+    photoUrl: mediaUrl(backend.urlPhoto),
     status: backend.statut,
     createdAt: backend.creeLe,
   };

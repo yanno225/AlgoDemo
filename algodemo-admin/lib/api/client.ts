@@ -17,6 +17,16 @@ import { SESSION_COOKIE, type Session } from "@/lib/auth/session";
 export const API_BASE_URL =
   process.env.API_BASE_URL ?? "http://localhost:3000";
 
+/**
+ * Rend absolue une URL média renvoyée par l'API. Le backend stocke des
+ * chemins relatifs (`/media/f/…`) et streame lui-même les fichiers — aucune
+ * IP figée en base, les médias suivent l'adresse du serveur.
+ */
+export function urlMediaAbsolue(url: string | null): string | null {
+  if (!url) return null;
+  return url.startsWith("/") ? `${API_BASE_URL}${url}` : url;
+}
+
 /** Erreur applicative renvoyée par l'API (format uniforme du backend). */
 export class ApiError extends Error {
   constructor(

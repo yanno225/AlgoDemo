@@ -51,5 +51,16 @@ function resolveBaseUrl(): string {
 
 export const API_BASE_URL = resolveBaseUrl();
 
+/**
+ * Rend absolue une URL média renvoyée par l'API. Le backend stocke des
+ * chemins RELATIFS (`/media/f/…`) et streame lui-même les fichiers : en les
+ * préfixant ici par l'adresse courante de l'API, les médias fonctionnent sur
+ * n'importe quel réseau (maison, salle de démo…) sans IP figée en base.
+ */
+export function mediaUrl(url: string | null | undefined): string | null {
+  if (!url) return null;
+  return url.startsWith('/') ? `${API_BASE_URL}${url}` : url;
+}
+
 /** Délai maximal d'une requête, en millisecondes. */
 export const API_TIMEOUT = 15000;

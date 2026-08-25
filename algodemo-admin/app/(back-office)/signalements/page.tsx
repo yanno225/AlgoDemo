@@ -14,6 +14,7 @@ import {
   type SignalementCitoyenAdmin,
 } from "@/lib/data/signalements-citoyens";
 import { changerStatutSignalement } from "@/lib/data/signalements-citoyens-actions";
+import { urlMediaAbsolue } from "@/lib/api/client";
 import { requireSectionAccess } from "@/lib/auth/guard";
 import { formatRelative } from "@/lib/format";
 import { PageHeader } from "@/components/layout/PageHeader";
@@ -132,7 +133,7 @@ function CarteSignalement({
     >
       {signalement.urlPhoto && (
         <img
-          src={signalement.urlPhoto}
+          src={urlMediaAbsolue(signalement.urlPhoto) ?? undefined}
           alt=""
           className="h-36 w-full object-cover"
         />

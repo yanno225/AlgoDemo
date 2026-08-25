@@ -1,4 +1,5 @@
 import { apiClient } from './client';
+import { mediaUrl } from '../../constants/api';
 import { THEMATICS, type ThematicId } from '../../constants/thematics';
 
 /**
@@ -129,8 +130,8 @@ function mapContenu(
     isOfficial: backend.estOfficiel,
     date: formaterDate(backend.publieLe ?? backend.creeLe),
     // `urlMedia` porte l'image OU la vidéo — le `type` du contenu tranche.
-    imageUrl: estVideo ? undefined : backend.urlMedia ?? undefined,
-    videoUrl: estVideo ? backend.urlMedia! : undefined,
+    imageUrl: estVideo ? undefined : mediaUrl(backend.urlMedia) ?? undefined,
+    videoUrl: estVideo ? mediaUrl(backend.urlMedia)! : undefined,
     likesCount: backend.nombreReactions ?? 0,
     commentsCount: backend.nombreCommentaires ?? 0,
   };

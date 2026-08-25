@@ -19,6 +19,7 @@ import {
   type DebatAdmin,
 } from "@/lib/data/debats";
 import { demarrerDebat, publierResultats } from "@/lib/data/debats-actions";
+import { urlMediaAbsolue } from "@/lib/api/client";
 import { getThematicByLabel } from "@/lib/domain/thematics";
 import { formatDate, formatTime } from "@/lib/format";
 import { PageHeader } from "@/components/layout/PageHeader";
@@ -153,7 +154,7 @@ export default async function DebatsPage({
                     <div className="relative h-36 w-full">
                       {debat.urlCouverture ? (
                         <img
-                          src={debat.urlCouverture}
+                          src={urlMediaAbsolue(debat.urlCouverture) ?? undefined}
                           alt=""
                           className="h-full w-full object-cover"
                         />

@@ -1,4 +1,5 @@
 import { apiClient } from './client';
+import { mediaUrl } from '../../constants/api';
 import { THEMATICS, type ThematicId } from '../../constants/thematics';
 
 /**
@@ -91,8 +92,8 @@ function mapDebate(backend: BackendDebate): Debate {
     thematicId: backend.thematique
       ? (SLUG_PAR_LIBELLE.get(normaliser(backend.thematique.libelle)) ?? null)
       : null,
-    coverUrl: backend.urlCouverture,
-    replayUrl: backend.urlReplay,
+    coverUrl: mediaUrl(backend.urlCouverture),
+    replayUrl: mediaUrl(backend.urlReplay),
   };
 }
 

@@ -27,11 +27,27 @@ const TYPES_AUTORISES = new Set([
 export const TAILLE_MAX_OCTETS = 200 * 1024 * 1024;
 
 export interface FichierUploade {
-  /** URL publique à enregistrer sur le contenu (urlMedia, urlReplay…) */
+  /**
+   * URL à enregistrer sur le contenu (urlMedia, urlReplay…). RELATIVE
+   * (`/media/f/<clé>`) : le backend streame lui-même les fichiers, si bien
+   * que les médias suivent l'adresse de l'API quel que soit le réseau
+   * (démo en salle, Wi-Fi de la maison…) — plus aucune IP figée en base.
+   */
   url: string;
   cle: string;
   type: string;
   taille: number;
+}
+
+/** Flux renvoyé par {@link MediaService.telecharger} pour le streaming HTTP. */
+export interface FluxMedia {
+  flux: NodeJS.ReadableStream;
+  type: string;
+  /** Taille totale de l'objet (en-tête Content-Length / Content-Range) */
+  taille: number;
+  /** Renseignés pour une réponse partielle 206 (lecture vidéo avec seek) */
+  debut?: number;
+  fin?: number;
 }
 
 /**
@@ -47,13 +63,9 @@ export class MediaService implements OnModuleInit {
   private readonly logger = new Logger(MediaService.name);
   private client: Minio.Client | null = null;
   private readonly bucket: string;
-  private readonly urlPublique: string;
 
   constructor(private readonly configService: ConfigService) {
     this.bucket = configService.get<string>('S3_BUCKET', 'algodemo-media');
-    this.urlPublique = (
-      configService.get<string>('S3_PUBLIC_URL') ?? 'http://localhost:9000'
-    ).replace(/\/$/, '');
   }
 
   async onModuleInit(): Promise<void> {
@@ -140,10 +152,58 @@ export class MediaService implements OnModuleInit {
     });
 
     return {
-      url: `${this.urlPublique}/${this.bucket}/${cle}`,
+      url: `/media/f/${cle}`,
       cle,
       type: fichier.mimetype,
       taille: fichier.size,
     };
+  }
+
+  /**
+   * Ouvre un flux de lecture sur un objet du bucket, avec prise en charge
+   * des requêtes Range (indispensable au seek des lecteurs vidéo mobiles).
+   * Renvoie null si l'objet n'existe pas.
+   */
+  async telecharger(cle: string, range?: string): Promise<FluxMedia | null> {
+    if (!this.client) {
+      throw new ServiceUnavailableException(
+        'Le stockage média n’est pas configuré sur ce serveur',
+      );
+    }
+
+    let stat: Minio.BucketItemStat;
+    try {
+      stat = await this.client.statObject(this.bucket, cle);
+    } catch {
+      return null;
+    }
+    const type =
+      (stat.metaData?.['content-type'] as string | undefined) ??
+      'application/octet-stream';
+
+    // Range « bytes=début-fin » (fin ouverte ou suffixe « -N » acceptés)
+    const correspondance = range
+      ? /^bytes=(\d*)-(\d*)$/.exec(range.trim())
+      : null;
+    if (correspondance && (correspondance[1] || correspondance[2])) {
+      const debut = correspondance[1]
+        ? Number(correspondance[1])
+        : Math.max(0, stat.size - Number(correspondance[2]));
+      const fin = correspondance[1] && correspondance[2]
+        ? Math.min(Number(correspondance[2]), stat.size - 1)
+        : stat.size - 1;
+      if (debut <= fin && debut < stat.size) {
+        const flux = await this.client.getPartialObject(
+          this.bucket,
+          cle,
+          debut,
+          fin - debut + 1,
+        );
+        return { flux, type, taille: stat.size, debut, fin };
+      }
+    }
+
+    const flux = await this.client.getObject(this.bucket, cle);
+    return { flux, type, taille: stat.size };
   }
 }
