@@ -197,10 +197,24 @@ Toutes dans `src/database/migrations/`, à exécuter avec `npm run migration:run
   POINT_FOCAL/ADMIN) : la photo d'un signalement citoyen part du téléphone.
 - Variables `S3_*` du `.env` remplies pour le conteneur `algodemo_minio` du
   docker-compose de l'équipe (le backend NestJS tourne sur l'hôte).
-- ⚠️ `S3_PUBLIC_URL` doit être l'**IP LAN** du poste (ex.
-  `http://192.168.1.223:9000`) : les URLs signées doivent être lisibles depuis
-  les téléphones. À ajuster si l'IP change, et à remplacer par un vrai domaine
-  en production.
+- **Streaming par l'API — `GET /media/f/:annee/:mois/:fichier` (public,
+  Range accepté)** : le backend streame lui-même les objets du bucket
+  (statObject + getObject/getPartialObject, réponses 200/206/404,
+  `Cache-Control: immutable`). `uploader()` renvoie désormais une URL
+  **RELATIVE** `/media/f/<clé>` que les clients préfixent par l'adresse de
+  l'API. Motivation (vécue en démo) : les URLs MinIO absolues stockées en
+  base figeaient l'IP LAN du poste — sur un autre réseau, plus aucun média ne
+  se chargeait. `S3_PUBLIC_URL` n'est plus utilisée. Les URLs absolues déjà
+  en base ont été réécrites en relatif :
+  `regexp_replace(col, '^https?://[^/]+/algodemo-media/', '/media/f/')` sur
+  `contenus.url_media`, `contenus.url_audio`, `debats."urlCouverture"`,
+  `debats."urlReplay"`, `signalements_citoyens."urlPhoto"`.
+- ⚠️ Démo nomade : ouvrir le port 3000 dans le pare-feu Windows sur **tous
+  les profils** (les réseaux inconnus sont classés « publics ») :
+  `New-NetFirewallRule -DisplayName "AlgoDemo API 3000" -Direction Inbound
+  -Protocol TCP -LocalPort 3000 -Action Allow -Profile Any` (PowerShell
+  administrateur). Et vérifier que Docker Desktop tourne — une mise en
+  veille du portable peut l'arrêter (symptôme : 500 `ECONNREFUSED`).
 
 ## Points d'attention restants (non traités, côté équipe backend)
 
