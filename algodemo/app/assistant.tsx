@@ -7,6 +7,7 @@ import {
   TextInput,
   KeyboardAvoidingView,
   Platform,
+  Linking,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -308,6 +309,60 @@ export default function AssistantScreen() {
                   </View>
                 )}
 
+                {verification.resultat.sourcesWeb.length > 0 && (
+                  <View style={styles.elements}>
+                    <Text
+                      style={{
+                        color: colors.textTertiary,
+                        fontSize: getFontSize(typography.sizes.micro),
+                        fontFamily: typography.families.bodyBold,
+                        letterSpacing: 0.8,
+                        marginBottom: spacing.sm,
+                      }}
+                    >
+                      {t('ai.webSourcesTitle').toUpperCase()}
+                    </Text>
+                    {verification.resultat.sourcesWeb.map((source, index) => (
+                      <PressableScale
+                        key={`${verification.id}_web_${index}`}
+                        onPress={() => void Linking.openURL(source.url)}
+                        scaleTo={0.98}
+                        haptic="light"
+                        accessibilityRole="link"
+                        accessibilityLabel={source.titre}
+                        style={[styles.element, { backgroundColor: colors.surfaceElevated }]}
+                      >
+                        <View style={styles.webSourceRow}>
+                          <Ionicons name="globe-outline" size={14} color={colors.primary} />
+                          <Text
+                            numberOfLines={1}
+                            style={{
+                              flex: 1,
+                              color: colors.primary,
+                              fontSize: getFontSize(typography.sizes.caption),
+                              fontFamily: typography.families.bodySemiBold,
+                            }}
+                          >
+                            {source.titre}
+                          </Text>
+                          <Ionicons name="open-outline" size={13} color={colors.textTertiary} />
+                        </View>
+                        <Text
+                          numberOfLines={1}
+                          style={{
+                            color: colors.textTertiary,
+                            fontSize: getFontSize(typography.sizes.micro),
+                            fontFamily: typography.families.body,
+                            marginTop: 2,
+                          }}
+                        >
+                          {source.url}
+                        </Text>
+                      </PressableScale>
+                    ))}
+                  </View>
+                )}
+
                 {verification.resultat.references.length > 0 && (
                   <View style={styles.elements}>
                     <Text
@@ -499,6 +554,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.xs,
     marginBottom: spacing.xs,
+  },
+  webSourceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
   },
   disclaimer: {
     flexDirection: 'row',

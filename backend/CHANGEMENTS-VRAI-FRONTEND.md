@@ -151,6 +151,16 @@ Toutes dans `src/database/migrations/`, à exécuter avec `npm run migration:run
 - Vérifié en réel : tendance confirmée en citant la série 2022→2024, seuil
   faux contredit chiffre à l'appui, hors-périmètre → « non vérifiable » ; le
   modèle signale de lui-même les sources « données de démonstration ».
+- **Renforcé (19 août)** : l'assistant mène désormais une **recherche web EN
+  DIRECT restreinte aux domaines de la liste blanche des sources** (allowed_domains
+  de l'outil web_search — il ne peut physiquement pas consulter un autre site),
+  en deux phases : recherche (compte-rendu avec URLs réelles) puis verdict
+  structuré ; seules les URLs présentes dans le compte-rendu ET appartenant à
+  un domaine autorisé sont renvoyées (`sourcesWeb`). Un **garde de périmètre**
+  décline poliment les sujets hors champ (sport, célébrités…) sans dépenser de
+  recherche : la plateforme couvre démocratie/gouvernance/droits/vie publique.
+  La liste blanche a été peuplée depuis le document d'atelier ESATIC/FID
+  (55 sources : CEI, ANSTAT, portails gouv.ci, UNESCO, OMS, Banque mondiale…).
 - **Élargi ensuite** : le contexte inclut désormais les `references` —
   synthèses PUBLIEES des fiches pays et contenus VERIFIE/publiés du feed
   (SQL direct, listes numérotées [R…], mêmes index anti-hallucination) —

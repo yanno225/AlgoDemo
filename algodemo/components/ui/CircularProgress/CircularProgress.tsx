@@ -23,6 +23,11 @@ export interface CircularProgressProps {
   delay?: number;
   /** Masque le libellé interne — l'appelant le compose alors lui-même. */
   hideLabel?: boolean;
+  /**
+   * Texte affiché au centre à la place de « N% » — pour les indicateurs qui
+   * ne sont pas des pourcentages (« 62,1 ans », « 1,2 t »).
+   */
+  displayValue?: string;
 }
 
 /**
@@ -40,6 +45,7 @@ export const CircularProgress: React.FC<CircularProgressProps> = ({
   strokeWidth = 7,
   delay = 0,
   hideLabel = false,
+  displayValue,
 }) => {
   const { colors, getFontSize } = useAccessibility();
 
@@ -97,13 +103,16 @@ export const CircularProgress: React.FC<CircularProgressProps> = ({
 
         <View style={[StyleSheet.absoluteFill, styles.center]} pointerEvents="none">
           <Text
+            numberOfLines={1}
+            adjustsFontSizeToFit
             style={{
               color: colors.textPrimary,
               fontSize: getFontSize(typography.sizes.bodySmall),
               fontFamily: typography.families.bodyBold,
+              paddingHorizontal: 6,
             }}
           >
-            {clamped}%
+            {displayValue ?? `${clamped}%`}
           </Text>
         </View>
       </View>

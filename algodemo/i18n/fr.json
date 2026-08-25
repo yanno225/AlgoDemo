@@ -343,14 +343,18 @@
     },
     "elementsTitle": "Données utilisées",
     "referencesTitle": "Références de la plateforme",
+    "webSourcesTitle": "Sources consultées en direct",
     "sourceLabel": "Source : {{source}}",
     "insightTitle": "Éclairage général",
     "insightBadge": "Non vérifié par nos sources",
-    "disclaimer": "Le verdict s'appuie exclusivement sur les données et contenus validés par l'équipe — jamais un chiffre inventé. L'« éclairage général », lui, vient des connaissances du modèle d'IA : il aide à comprendre, mais n'est pas vérifié par nos sources."
+    "disclaimer": "Le verdict s'appuie exclusivement sur les données validées de la plateforme et sur une recherche en direct limitée à la liste blanche des sources reconnues (CEI, ANSTAT, Banque mondiale…) — jamais un chiffre inventé. L'« éclairage général », lui, vient des connaissances du modèle d'IA et n'est pas vérifié par nos sources."
   },
   "pays": {
     "tabLabel": "Fiche pays",
     "title": "Fiche pays",
+    "noSynthesis": "Pas encore de synthèse validée pour cette thématique — elle sera publiée dès que les données collectées le permettront.",
+    "emptyDomain": "Les indicateurs de cette thématique seront alimentés par la collecte auprès des sources reconnues (CEI, ANSTAT, ministères…). Rien n'est affiché tant que rien n'est mesuré.",
+    "loadError": "Impossible de charger la fiche pays. Vérifiez votre connexion puis réessayez.",
     "updatedAt": "Dernière mise à jour : {{date}}",
     "aiSynthesisLabel": "Synthèse",
     "aiSynthesisNote": "Générée à partir de {{count}} sources analysées",

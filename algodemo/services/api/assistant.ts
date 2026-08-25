@@ -27,11 +27,19 @@ export interface FactReference {
   source: string;
 }
 
+/** Source web de la liste blanche consultée pendant la vérification. */
+export interface FactWebSource {
+  titre: string;
+  url: string;
+}
+
 export interface FactCheck {
   verdict: FactVerdict;
   explication: string;
   elements: FactElement[];
   references: FactReference[];
+  /** Recherche web EN DIRECT, restreinte à la liste blanche des sources. */
+  sourcesWeb: FactWebSource[];
   /**
    * Contexte général issu des connaissances du modèle — jamais compté dans
    * le verdict, affiché « non vérifié par nos sources ».

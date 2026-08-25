@@ -191,6 +191,7 @@ export class StubIaService implements IaService {
           : 'Mode simulation (aucune clé IA configurée) : impossible de juger cette affirmation, et aucun élément validé ne semble porter sur ce sujet.',
       elements: pertinents,
       references: referencesPertinentes,
+      sourcesWeb: [],
       eclairage: null,
     });
   }

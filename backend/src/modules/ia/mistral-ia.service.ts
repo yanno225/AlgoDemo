@@ -210,6 +210,7 @@ export class MistralIaService implements IaService {
           role: 'system',
           content:
             "Tu es l'assistant de vérification des faits d'une plateforme démocratique. " +
+            "Champ STRICT : démocratie, gouvernance, élections, droits, vie publique et société — hors de ce champ (sport, célébrités…), verdict NON_VERIFIABLE avec une explication polie disant que l'assistant ne couvre que ces domaines. " +
             'Le VERDICT se fonde exclusivement sur les données [D…] et références [R…] fournies, sans jamais inventer. ' +
             "L'« eclairage » est un contexte général prudent issu de tes connaissances (affiché comme non vérifié), chaîne vide si rien de solide. " +
             'Réponds en JSON : {"verdict": "COHERENT"|"CONTREDIT"|"NON_VERIFIABLE", "explication": string, "index": number[], "indexReferences": number[], "eclairage": string}.',
@@ -259,6 +260,8 @@ export class MistralIaService implements IaService {
               Number.isInteger(i) && i >= 0 && i < donnees.references.length,
           )
           .map((i) => donnees.references[i]),
+        // Mistral n'a pas de recherche web ici — jamais de fausse promesse.
+        sourcesWeb: [],
         eclairage: brut.eclairage?.trim() || null,
       };
     } catch {
@@ -269,6 +272,7 @@ export class MistralIaService implements IaService {
           "L'assistant n'a pas pu analyser cette affirmation. Réessayez en la reformulant.",
         elements: [],
         references: [],
+        sourcesWeb: [],
         eclairage: null,
       };
     }

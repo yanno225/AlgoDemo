@@ -1,5 +1,6 @@
-import React, { useState, useMemo } from 'react';
-import { StyleSheet, View, Text, ScrollView } from 'react-native';
+import React, { useState, useMemo, useCallback } from 'react';
+import { StyleSheet, View, Text, ScrollView, ActivityIndicator } from 'react-native';
+import { useFocusEffect } from 'expo-router';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -17,9 +18,9 @@ import { BrandLogo } from '../../components/ui/BrandLogo';
 import { CircularProgress } from '../../components/ui/CircularProgress';
 import { IndicatorDetailSheet } from '../../components/feature/pays/IndicatorDetailSheet';
 import { enterSection, enterListItem } from '../../components/ui/motion';
+import { getCountryProfile } from '../../services/api/fichePays';
 import {
-  COTE_DIVOIRE,
-  DomainId,
+  CountryProfile,
   CountryDomain,
   CountryIndicator,
   latestValue,
@@ -40,8 +41,25 @@ export default function CountryProfileScreen() {
   const { colors, getFontSize } = useAccessibility();
   const insets = useSafeAreaInsets();
 
-  const profile = COTE_DIVOIRE;
-  const [activeDomainId, setActiveDomainId] = useState<DomainId>(profile.domains[0].id);
+  // Les données viennent du backend : valeurs réelles + synthèses validées.
+  const [profile, setProfile] = useState<CountryProfile | null>(null);
+  const [hasError, setHasError] = useState(false);
+  const [activeDomainId, setActiveDomainId] = useState<string | null>(null);
+
+  const charger = useCallback(async () => {
+    try {
+      setProfile(await getCountryProfile("Côte d'Ivoire"));
+      setHasError(false);
+    } catch {
+      setHasError(true);
+    }
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      void charger();
+    }, [charger])
+  );
 
   // Indicateur dont on affiche le détail, et couleur de sa thématique.
   const [selected, setSelected] = useState<{
@@ -49,10 +67,45 @@ export default function CountryProfileScreen() {
     color: string;
   } | null>(null);
 
-  const activeDomain = useMemo(
-    () => profile.domains.find((d) => d.id === activeDomainId) ?? profile.domains[0],
-    [activeDomainId, profile.domains]
-  );
+  const activeDomain = useMemo(() => {
+    if (!profile) return null;
+    return (
+      profile.domains.find((d) => d.id === activeDomainId) ?? profile.domains[0] ?? null
+    );
+  }, [activeDomainId, profile]);
+
+  if (!profile) {
+    return (
+      <Screen>
+        <View style={styles.pending}>
+          {hasError ? (
+            <>
+              <Ionicons name="cloud-offline-outline" size={30} color={colors.textTertiary} />
+              <Text
+                style={{
+                  color: colors.textSecondary,
+                  fontSize: getFontSize(typography.sizes.bodySmall),
+                  fontFamily: typography.families.body,
+                  textAlign: 'center',
+                }}
+              >
+                {t('pays.loadError')}
+              </Text>
+              <Button
+                label={t('debats.retry')}
+                onPress={() => void charger()}
+                variant="outline"
+                size="sm"
+                haptic="light"
+              />
+            </>
+          ) : (
+            <ActivityIndicator size="large" color={colors.primary} />
+          )}
+        </View>
+      </Screen>
+    );
+  }
 
   return (
     <Screen>
@@ -128,52 +181,8 @@ export default function CountryProfileScreen() {
           </Text>
         </Animated.View>
 
-        {/* ─── Synthèse IA ─────────────────────────────────────────── */}
-        <Animated.View
-          entering={enterListItem(1)}
-          style={[styles.synthCard, { backgroundColor: colors.primaryPale }]}
-        >
-          <View style={styles.synthHeader}>
-            <MaterialCommunityIcons name="creation" size={16} color={colors.primary} />
-            <Text
-              style={{
-                color: colors.primary,
-                fontSize: getFontSize(typography.sizes.caption),
-                fontFamily: typography.families.bodyBold,
-              }}
-            >
-              {t('pays.aiSynthesisLabel')}
-            </Text>
-          </View>
-
-          <Text
-            style={[
-              styles.synthText,
-              {
-                color: colors.textPrimary,
-                fontSize: getFontSize(typography.sizes.bodySmall),
-                fontFamily: typography.families.body,
-              },
-            ]}
-          >
-            {profile.aiSynthesis}
-          </Text>
-
-          <Text
-            style={{
-              color: colors.textTertiary,
-              fontSize: getFontSize(typography.sizes.micro),
-              fontFamily: typography.families.bodyMedium,
-              marginTop: spacing.sm,
-              letterSpacing: 0.4,
-            }}
-          >
-            {t('pays.aiSynthesisNote', { count: profile.sourceCount }).toUpperCase()}
-          </Text>
-        </Animated.View>
-
         {/* ─── Sélecteur de domaine ────────────────────────────────── */}
-        <Animated.View entering={enterListItem(2)}>
+        <Animated.View entering={enterListItem(1)}>
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
@@ -182,22 +191,73 @@ export default function CountryProfileScreen() {
             {profile.domains.map((domain) => (
               <DomainPill
                 key={domain.id}
-                label={t(`pays.domains.${domain.id}`)}
+                label={domain.sectionTitleKey}
                 color={colors.thematic[domain.colorToken]}
-                isActive={domain.id === activeDomainId}
+                isActive={domain.id === activeDomain?.id}
                 onPress={() => setActiveDomainId(domain.id)}
               />
             ))}
           </ScrollView>
         </Animated.View>
 
+        {/* ─── Synthèse validée de la thématique active ────────────── */}
+        {activeDomain && (
+          <Animated.View
+            key={`synth_${activeDomain.id}`}
+            entering={enterListItem(0)}
+            style={[styles.synthCard, { backgroundColor: colors.primaryPale }]}
+          >
+            <View style={styles.synthHeader}>
+              <MaterialCommunityIcons name="creation" size={16} color={colors.primary} />
+              <Text
+                style={{
+                  color: colors.primary,
+                  fontSize: getFontSize(typography.sizes.caption),
+                  fontFamily: typography.families.bodyBold,
+                }}
+              >
+                {t('pays.aiSynthesisLabel')} — {activeDomain.sectionTitleKey}
+              </Text>
+            </View>
+
+            <Text
+              style={[
+                styles.synthText,
+                {
+                  color: colors.textPrimary,
+                  fontSize: getFontSize(typography.sizes.bodySmall),
+                  fontFamily: typography.families.body,
+                },
+              ]}
+            >
+              {activeDomain.synthesis ?? t('pays.noSynthesis')}
+            </Text>
+
+            {activeDomain.sourceCount > 0 && (
+              <Text
+                style={{
+                  color: colors.textTertiary,
+                  fontSize: getFontSize(typography.sizes.micro),
+                  fontFamily: typography.families.bodyMedium,
+                  marginTop: spacing.sm,
+                  letterSpacing: 0.4,
+                }}
+              >
+                {t('pays.aiSynthesisNote', { count: activeDomain.sourceCount }).toUpperCase()}
+              </Text>
+            )}
+          </Animated.View>
+        )}
+
         {/* ─── Indicateurs du domaine actif ────────────────────────── */}
-        <DomainSection
-          key={activeDomain.id}
-          domain={activeDomain}
-          color={colors.thematic[activeDomain.colorToken]}
-          onSelect={(indicator, color) => setSelected({ indicator, color })}
-        />
+        {activeDomain && (
+          <DomainSection
+            key={activeDomain.id}
+            domain={activeDomain}
+            color={colors.thematic[activeDomain.colorToken]}
+            onSelect={(indicator, color) => setSelected({ indicator, color })}
+          />
+        )}
 
         <Button
           label={t('pays.sources')}
@@ -210,7 +270,8 @@ export default function CountryProfileScreen() {
           style={styles.sourcesButton}
         />
 
-        {/* ─── Le saviez-vous ? ────────────────────────────────────── */}
+        {/* ─── Le saviez-vous ? — calculé depuis les mesures réelles ── */}
+        {profile.didYouKnow && (
         <Animated.View
           entering={enterListItem(4)}
           style={[styles.factCard, { backgroundColor: colors.secondaryPale }]}
@@ -241,6 +302,7 @@ export default function CountryProfileScreen() {
             </Text>
           </View>
         </Animated.View>
+        )}
       </ScrollView>
 
       {/* Détail de l'indicateur touché : évolution, sources, tendance. */}
@@ -252,6 +314,10 @@ export default function CountryProfileScreen() {
     </Screen>
   );
 }
+
+/** 62.11 → « 62,1 » — format court français pour le centre des jauges. */
+const formatFr = (n: number) =>
+  Number.isInteger(n) ? String(n) : n.toFixed(1).replace('.', ',');
 
 // ─── Section d'un domaine ───────────────────────────────────────────
 // Isolée dans son composant, montée avec une `key` liée au domaine : changer
@@ -279,6 +345,23 @@ const DomainSection: React.FC<{
         </Text>
       </View>
 
+      {domain.indicators.length === 0 && (
+        <View style={[styles.emptyDomain, { backgroundColor: colors.surface }, shadows.sm]}>
+          <Ionicons name="hourglass-outline" size={22} color={colors.textTertiary} />
+          <Text
+            style={{
+              flex: 1,
+              color: colors.textSecondary,
+              fontSize: getFontSize(typography.sizes.caption),
+              fontFamily: typography.families.body,
+              lineHeight: 18,
+            }}
+          >
+            {t('pays.emptyDomain')}
+          </Text>
+        </View>
+      )}
+
       <View style={styles.grid}>
         {domain.indicators.map((indicator, index) => (
           <PressableScale
@@ -290,13 +373,20 @@ const DomainSection: React.FC<{
             style={[styles.gaugeCard, { backgroundColor: colors.surface }, shadows.sm]}
           >
             <CircularProgress
-              percentage={latestValue(indicator)}
+              percentage={Math.min(100, latestValue(indicator))}
               label={indicator.labelKey}
               color={color}
               size={84}
               strokeWidth={8}
               delay={120 + index * 110}
               hideLabel
+              // Hors pourcentages (années, ‰, tonnes…), le centre affiche la
+              // vraie valeur avec son unité — jamais un faux « % ».
+              displayValue={
+                indicator.unit === '%'
+                  ? undefined
+                  : `${formatFr(latestValue(indicator))}${indicator.unit}`
+              }
             />
             <Text
               numberOfLines={2}
@@ -505,5 +595,19 @@ const styles = StyleSheet.create({
   },
   factBody: {
     flex: 1,
+  },
+  pending: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: spacing.md,
+    paddingHorizontal: spacing.xxl,
+  },
+  emptyDomain: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    borderRadius: borderRadius.xl,
+    padding: spacing.lg,
   },
 });
