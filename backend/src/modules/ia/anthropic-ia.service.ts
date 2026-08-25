@@ -54,9 +54,10 @@ export class AnthropicIaService implements IaService {
 
     return this.completer(
       "Tu es un analyste de la démocratie qui rédige des synthèses claires, neutres et vérifiables, en français, pour des citoyens de tous niveaux. N'invente aucun chiffre : appuie-toi uniquement sur les données fournies.",
-      `Rédige une synthèse (5 à 8 phrases) de la thématique « ${donnees.thematique} » ` +
+      `Rédige une synthèse COURTE (3 à 4 phrases maximum) de la thématique « ${donnees.thematique} » ` +
         `pour ${donnees.paysOuZone}, à partir de ces indicateurs mesurés :\n${lignes || '(aucune donnée disponible)'}\n\n` +
-        `Décris les tendances et l'évolution dans le temps, sans jargon. ` +
+        `Va à l'essentiel : la tendance principale et un ou deux chiffres marquants, sans jargon. ` +
+        `Elle s'affiche sur un écran de téléphone — la concision prime. ` +
         `Réponds uniquement par la synthèse, sans préambule.`,
     );
   }

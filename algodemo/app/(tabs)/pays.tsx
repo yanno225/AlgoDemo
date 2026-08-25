@@ -1,5 +1,13 @@
 import React, { useState, useMemo, useCallback } from 'react';
-import { StyleSheet, View, Text, ScrollView, ActivityIndicator } from 'react-native';
+import {
+  StyleSheet,
+  View,
+  Text,
+  ScrollView,
+  ActivityIndicator,
+  Modal,
+  Pressable,
+} from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
@@ -66,6 +74,9 @@ export default function CountryProfileScreen() {
     indicator: CountryIndicator;
     color: string;
   } | null>(null);
+
+  // Feuille des sources réelles du domaine actif.
+  const [showSources, setShowSources] = useState(false);
 
   const activeDomain = useMemo(() => {
     if (!profile) return null;
@@ -264,9 +275,7 @@ export default function CountryProfileScreen() {
           variant="outline"
           icon="document-text-outline"
           haptic="light"
-          onPress={() => {
-            /* TODO(backend) : ouverture de la liste détaillée des sources */
-          }}
+          onPress={() => setShowSources(true)}
           style={styles.sourcesButton}
         />
 
@@ -311,6 +320,87 @@ export default function CountryProfileScreen() {
         color={selected?.color ?? colors.primary}
         onClose={() => setSelected(null)}
       />
+
+      {/* ─── Sources détaillées du domaine actif ─────────────────────── */}
+      <Modal
+        visible={showSources}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowSources(false)}
+      >
+        <View style={[styles.sourcesOverlay, { backgroundColor: colors.overlay }]}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setShowSources(false)} />
+          <View style={[styles.sourcesSheet, { backgroundColor: colors.surface }, shadows.md]}>
+            <View style={[styles.sourcesGrabber, { backgroundColor: colors.border }]} />
+            <Text
+              style={{
+                color: colors.textPrimary,
+                fontSize: getFontSize(typography.sizes.h4),
+                fontFamily: typography.families.headingSemiBold,
+                marginBottom: spacing.xs,
+              }}
+            >
+              {t('pays.sources')}
+            </Text>
+            <Text
+              style={{
+                color: colors.textTertiary,
+                fontSize: getFontSize(typography.sizes.caption),
+                fontFamily: typography.families.body,
+                marginBottom: spacing.md,
+              }}
+            >
+              {activeDomain?.sectionTitleKey}
+            </Text>
+            <ScrollView showsVerticalScrollIndicator={false} style={styles.sourcesList}>
+              {(activeDomain?.indicators ?? []).map((indicator) => (
+                <View
+                  key={indicator.id}
+                  style={[styles.sourceRow, { borderBottomColor: colors.borderLight }]}
+                >
+                  <Text
+                    style={{
+                      color: colors.textPrimary,
+                      fontSize: getFontSize(typography.sizes.bodySmall),
+                      fontFamily: typography.families.bodySemiBold,
+                      marginBottom: 2,
+                    }}
+                  >
+                    {indicator.labelKey}
+                  </Text>
+                  {/* Chaque mesure garde sa source exacte — la traçabilité
+                      exigée par le jury, lisible par n'importe qui. */}
+                  {indicator.history.map((mesure, index) => (
+                    <Text
+                      key={`${indicator.id}_${index}`}
+                      style={{
+                        color: colors.textSecondary,
+                        fontSize: getFontSize(typography.sizes.micro),
+                        fontFamily: typography.families.body,
+                        lineHeight: 16,
+                      }}
+                    >
+                      {mesure.dateMesure.slice(0, 4)} · {mesure.valeur} — {mesure.source}
+                    </Text>
+                  ))}
+                </View>
+              ))}
+              {(activeDomain?.indicators ?? []).length === 0 && (
+                <Text
+                  style={{
+                    color: colors.textSecondary,
+                    fontSize: getFontSize(typography.sizes.bodySmall),
+                    fontFamily: typography.families.body,
+                    paddingVertical: spacing.lg,
+                  }}
+                >
+                  {t('pays.emptyDomain')}
+                </Text>
+              )}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </Screen>
   );
 }
@@ -609,5 +699,31 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     borderRadius: borderRadius.xl,
     padding: spacing.lg,
+  },
+  sourcesOverlay: {
+    flex: 1,
+    justifyContent: 'flex-end',
+  },
+  sourcesSheet: {
+    borderTopLeftRadius: borderRadius.xxl,
+    borderTopRightRadius: borderRadius.xxl,
+    paddingHorizontal: spacing.xl,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.xxl,
+    maxHeight: '72%',
+  },
+  sourcesGrabber: {
+    alignSelf: 'center',
+    width: 40,
+    height: 4,
+    borderRadius: borderRadius.full,
+    marginBottom: spacing.md,
+  },
+  sourcesList: {
+    flexGrow: 0,
+  },
+  sourceRow: {
+    paddingVertical: spacing.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
 });
