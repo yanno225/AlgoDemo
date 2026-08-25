@@ -88,6 +88,18 @@ export interface DonneesVerification {
   donnees: DonneeMesuree[];
   /** Les textes validés par l'équipe (synthèses publiées, contenus vérifiés) */
   references: ReferenceValidee[];
+  /**
+   * Domaines de la liste blanche des sources (CEI, ANSTAT, Banque mondiale…) :
+   * l'implémentation peut y mener une recherche web EN DIRECT — et nulle part
+   * ailleurs. Vide : pas de recherche web.
+   */
+  domainesAutorises: string[];
+}
+
+/** Source web consultée pendant la vérification (domaine de la liste blanche) */
+export interface SourceWeb {
+  titre: string;
+  url: string;
 }
 
 export interface ResultatVerification {
@@ -98,6 +110,12 @@ export interface ResultatVerification {
   elements: DonneeMesuree[];
   /** Sous-ensemble des références validées effectivement utilisées */
   references: ReferenceValidee[];
+  /**
+   * Sources web de la liste blanche réellement consultées pendant la
+   * vérification — les URLs viennent des résultats de recherche, pas de la
+   * mémoire du modèle.
+   */
+  sourcesWeb: SourceWeb[];
   /**
    * Contexte général issu des connaissances du modèle — JAMAIS compté dans le
    * verdict, toujours présenté à l'utilisateur comme « non vérifié par nos

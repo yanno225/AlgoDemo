@@ -26,15 +26,29 @@ export class AssistantService {
   ) {}
 
   async verifier(affirmation: string): Promise<ResultatVerification> {
-    const [donnees, references] = await Promise.all([
+    const [donnees, references, domainesAutorises] = await Promise.all([
       this.donneesMesurees(),
       this.referencesValidees(),
+      this.domainesListeBlanche(),
     ]);
     return this.iaService.verifierAffirmation({
       affirmation: affirmation.trim().slice(0, 500),
       donnees,
       references,
+      domainesAutorises,
     });
+  }
+
+  /**
+   * Les domaines de la liste blanche des sources — le périmètre exact de la
+   * recherche web de l'assistant. Une source désactivée sort du périmètre
+   * immédiatement.
+   */
+  private async domainesListeBlanche(): Promise<string[]> {
+    const lignes = await this.dataSource.query<{ domaine: string }[]>(
+      `SELECT domaine FROM sources_autorisees WHERE active = true AND domaine IS NOT NULL`,
+    );
+    return lignes.map((l) => l.domaine);
   }
 
   /**

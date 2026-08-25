@@ -215,9 +215,84 @@ export class AnthropicIaService implements IaService {
     );
   }
 
+  /**
+   * Phase de recherche : le modèle interroge le web EN DIRECT, mais uniquement
+   * sur les domaines de la liste blanche (CEI, ANSTAT, Banque mondiale…).
+   * Retourne un compte-rendu textuel avec les URLs réellement consultées —
+   * vide si la recherche n'apporte rien ou échoue (le verdict n'en dépend pas).
+   */
+  private async rechercherSurListeBlanche(
+    affirmation: string,
+    domaines: string[],
+  ): Promise<string> {
+    if (domaines.length === 0) return '';
+    try {
+      const reponse = await this.client.messages.create({
+        model: this.model,
+        max_tokens: 3000,
+        system:
+          'Tu vérifies des faits pour une plateforme démocratique dont le champ est STRICT : démocratie, gouvernance, élections, droits, justice, vie publique et société (genre, jeunesse, santé publique, environnement — les thématiques du référentiel). ' +
+          "AVANT toute recherche : si l'affirmation est étrangère à ce champ (sport, célébrités, divertissement, vie privée…), ne fais AUCUNE recherche et réponds exactement HORS_SUJET, rien d'autre. " +
+          'Sinon : tu recherches UNIQUEMENT sur les domaines autorisés (imposés par l’outil). ' +
+          'Rapporte ce que les sources disent réellement — chiffres, dates, URL exacte de chaque page utilisée. ' +
+          "Si les recherches ne donnent rien d'utile, dis-le en une phrase.",
+        messages: [
+          {
+            role: 'user',
+            content:
+              `Affirmation à vérifier :\n« ${affirmation} »\n\n` +
+              `Recherche ce que les sources autorisées en disent, puis résume tes constats en citant pour chacun la source et son URL.`,
+          },
+        ],
+        tools: [
+          {
+            type: 'web_search_20260209',
+            name: 'web_search',
+            max_uses: 5,
+            // La liste blanche de la plateforme fait loi — le modèle ne peut
+            // physiquement pas consulter un autre domaine.
+            allowed_domains: domaines.slice(0, 40),
+          } as Anthropic.Messages.ToolUnion,
+        ],
+      });
+      if (reponse.stop_reason === 'refusal') return '';
+      return reponse.content
+        .filter((b) => b.type === 'text')
+        .map((b) => b.text)
+        .join('\n')
+        .trim();
+    } catch (e) {
+      this.logger.warn(
+        `Recherche web indisponible pour la vérification : ${e instanceof Error ? e.message : String(e)}`,
+      );
+      return '';
+    }
+  }
+
   async verifierAffirmation(
     donnees: DonneesVerification,
   ): Promise<ResultatVerification> {
+    // Phase 1 — recherche en direct sur la liste blanche (tolérante à l'échec).
+    const rechercheWeb = await this.rechercherSurListeBlanche(
+      donnees.affirmation,
+      donnees.domainesAutorises,
+    );
+
+    // Garde de périmètre : l'assistant vérifie la vie démocratique et sociale,
+    // pas les résultats sportifs ni la vie des célébrités. Décliné poliment,
+    // sans dépenser l'appel de verdict.
+    if (rechercheWeb.trim().toUpperCase().startsWith('HORS_SUJET')) {
+      return {
+        verdict: 'NON_VERIFIABLE',
+        explication:
+          "Cette question sort du champ de l'assistant, qui vérifie les affirmations liées à la démocratie, la gouvernance, les droits et la vie publique — les thématiques de la plateforme. Reformulez avec un sujet citoyen (élections, justice, services publics, société…) et je m'y attelle.",
+        elements: [],
+        references: [],
+        sourcesWeb: [],
+        eclairage: null,
+      };
+    }
+
     // Données et références sont numérotées : l'IA cite des INDEX, jamais du
     // texte libre — impossible d'inventer une source qui n'existe pas.
     const lignesDonnees = donnees.donnees
@@ -239,10 +314,12 @@ export class AnthropicIaService implements IaService {
       max_tokens: 2048,
       system:
         "Tu es l'assistant de vérification des faits d'une plateforme démocratique citoyenne internationale. " +
-        'Ton VERDICT se fonde exclusivement sur les données mesurées [D…] et les références validées [R…] fournies : ' +
-        "tu ne cites jamais un chiffre, un fait ou une source absents de ces listes, et si elles ne permettent pas de trancher, le verdict est NON_VERIFIABLE — le dire honnêtement est une réussite. " +
-        "En COMPLÉMENT du verdict, tu peux fournir un « éclairage » : 2 à 3 phrases de contexte général issues de tes connaissances, prudentes et factuelles, qui aident le citoyen à comprendre le sujet. " +
+        'Ton VERDICT se fonde exclusivement sur trois matériaux : les données mesurées [D…], les références validées [R…], et le compte-rendu de recherche web mené sur les SOURCES AUTORISÉES de la plateforme. ' +
+        "Tu ne cites jamais un chiffre, un fait ou une source absents de ces matériaux, et si rien ne permet de trancher, le verdict est NON_VERIFIABLE — le dire honnêtement est une réussite. " +
+        'Dans sourcesWeb, ne recopie QUE des URLs présentes dans le compte-rendu de recherche — jamais une URL de mémoire. ' +
+        "En COMPLÉMENT du verdict, tu peux fournir un « éclairage » : 2 à 3 phrases de contexte général issues de tes connaissances, prudentes et factuelles. " +
         "Cet éclairage sera affiché comme NON vérifié par la plateforme : n'y avance jamais un chiffre précis dont tu n'es pas sûr, et laisse-le vide si tu n'as rien de solide. " +
+        "Champ STRICT de la plateforme : démocratie, gouvernance, élections, droits, justice, vie publique et société. Si l'affirmation en sort (sport, célébrités, divertissement…), verdict NON_VERIFIABLE avec une explication disant poliment que l'assistant ne couvre que ces domaines — index, indexReferences et sourcesWeb vides, eclairage vide. " +
         'Tu restes neutre et pédagogue, en français simple.',
       messages: [
         {
@@ -251,8 +328,10 @@ export class AnthropicIaService implements IaService {
             `Affirmation du citoyen :\n« ${donnees.affirmation} »\n\n` +
             `Données mesurées [D…] :\n${lignesDonnees || '(aucune)'}\n\n` +
             `Références validées par l'équipe [R…] :\n${lignesReferences || '(aucune)'}\n\n` +
+            `--- RECHERCHE WEB SUR LES SOURCES AUTORISÉES ---\n${rechercheWeb || '(aucune recherche disponible)'}\n\n` +
             `Juge l'affirmation : COHERENT si les éléments la soutiennent, CONTREDIT s'ils la contredisent, ` +
-            `NON_VERIFIABLE sinon. Explique en 2 à 4 phrases simples, liste les index des données (index) et des références (indexReferences) utilisées, ` +
+            `NON_VERIFIABLE sinon. Explique en 2 à 5 phrases simples en t'appuyant en priorité sur les éléments les plus récents et les plus précis, ` +
+            `liste les index des données (index) et des références (indexReferences) utilisées, les sources web réellement utilisées (sourcesWeb, titre + url tirés du compte-rendu), ` +
             `et ajoute ton éclairage général (eclairage, chaîne vide si rien d'utile).`,
         },
       ],
@@ -277,13 +356,27 @@ export class AnthropicIaService implements IaService {
                 items: { type: 'integer' },
                 description: 'Index des références validées utilisées (R)',
               },
+              sourcesWeb: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    titre: { type: 'string' },
+                    url: { type: 'string' },
+                  },
+                  required: ['titre', 'url'],
+                  additionalProperties: false,
+                },
+                description:
+                  'Sources web utilisées — uniquement des URLs présentes dans le compte-rendu de recherche',
+              },
               eclairage: {
                 type: 'string',
                 description:
                   'Contexte général (connaissances du modèle), prudent — chaîne vide si rien de solide',
               },
             },
-            required: ['verdict', 'explication', 'index', 'indexReferences', 'eclairage'],
+            required: ['verdict', 'explication', 'index', 'indexReferences', 'sourcesWeb', 'eclairage'],
             additionalProperties: false,
           },
         },
@@ -297,6 +390,7 @@ export class AnthropicIaService implements IaService {
           "Cette demande n'a pas pu être traitée par l'assistant. Reformulez votre affirmation.",
         elements: [],
         references: [],
+        sourcesWeb: [],
         eclairage: null,
       };
     }
@@ -311,6 +405,7 @@ export class AnthropicIaService implements IaService {
       explication: string;
       index: number[];
       indexReferences: number[];
+      sourcesWeb: { titre: string; url: string }[];
       eclairage: string;
     };
     return {
@@ -325,6 +420,15 @@ export class AnthropicIaService implements IaService {
           (i) => Number.isInteger(i) && i >= 0 && i < donnees.references.length,
         )
         .map((i) => donnees.references[i]),
+      // Garde-fou : seules les URLs réellement présentes dans le compte-rendu
+      // de recherche passent — jamais une URL de mémoire, et uniquement des
+      // domaines de la liste blanche.
+      sourcesWeb: (brut.sourcesWeb ?? []).filter(
+        (s) =>
+          s?.url &&
+          rechercheWeb.includes(s.url) &&
+          donnees.domainesAutorises.some((d) => s.url.includes(d)),
+      ),
       eclairage: brut.eclairage?.trim() || null,
     };
   }
