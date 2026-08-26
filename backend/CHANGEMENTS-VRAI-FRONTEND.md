@@ -191,6 +191,29 @@ Toutes dans `src/database/migrations/`, à exécuter avec `npm run migration:run
 - Distinct des signalements de direct (Débats) et des signalements de contenus
   (Feed) : ici on signale le monde réel, pas la plateforme.
 
+## Module Débats — Prise de parole des citoyens (« main levée », NOUVEAU)
+
+- **Migration 1755100000000-CreerDemandesParole** : table `demandes_parole`
+  (id, debatId FK CASCADE, userId, statut, decidePar, creeLe, majLe) +
+  index partiel UNIQUE garantissant une seule demande vivante
+  (EN_ATTENTE/ACCORDEE) par citoyen et par débat.
+- **`ParoleService`** (`services/parole.service.ts`) : cycle
+  EN_ATTENTE → ACCORDEE → TERMINEE (sorties REFUSEE/ANNULEE), tribune
+  limitée à `MAX_TRIBUNE = 2`, staff = modérateur désigné ou
+  ADMIN/POINT_FOCAL (même règle que `rejoindre`), noms publics « Prénom N. »
+  résolus à la lecture (RG-USR-07 rétroactif), tout est conservé et
+  horodaté (journal d'audit d'un événement public).
+- **Gateway `/debats`** — nouveaux événements client :
+  `parole.demander` / `parole.annuler` / `parole.redescendre` (citoyen),
+  `parole.accorder` / `parole.refuser` / `parole.retirer` (staff, par
+  demandeId). Diffusions : `parole.file` (salle staff), `tribune.maj`
+  (toute la salle), `parole.statut` (au seul citoyen concerné). L'accusé de
+  `rejoindre` embarque `parole: { maDemande, tribune, file? }` (file
+  réservée au staff). La clôture du débat vide file et tribune.
+- Phase 2 prévue (build de développement LiveKit) : à l'accord, régénérer
+  un jeton `canPublish` audio pour le citoyen et le révoquer au retrait —
+  la mécanique ci-dessus ne changera pas.
+
 ## Média / MinIO
 
 - **`POST /media/upload` ouvert à tous les comptes authentifiés** (était

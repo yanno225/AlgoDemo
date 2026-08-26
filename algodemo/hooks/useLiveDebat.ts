@@ -37,6 +37,16 @@ export interface LiveMessage {
 
 export type RoleParticipation = 'MODERATEUR' | 'INTERVENANT' | 'SPECTATEUR';
 
+/** Une main levée (file du staff) ou un invité à la tribune. */
+export interface EntreeParole {
+  id: string;
+  nom: string;
+  depuis: string;
+}
+
+/** Où j'en suis dans le circuit de prise de parole. */
+export type StatutParole = 'EN_ATTENTE' | 'ACCORDEE' | null;
+
 export type RoomState =
   | 'signed-out' // pas de session : on peut regarder, pas participer
   | 'connecting'
@@ -50,6 +60,11 @@ interface JoinAck {
   roleParticipation?: RoleParticipation;
   affirmations?: LiveAffirmation[];
   messages?: Omit<LiveMessage, 'estMoi'>[];
+  parole?: {
+    maDemande: StatutParole;
+    tribune: EntreeParole[];
+    file?: EntreeParole[];
+  };
 }
 
 interface VoteAck {
@@ -70,6 +85,15 @@ export function useLiveDebat(debatId: string | undefined) {
   const [role, setRole] = useState<RoleParticipation | null>(null);
   /** Mon vote courant par affirmation (retour visuel immédiat). */
   const [myVotes, setMyVotes] = useState<Record<string, boolean>>({});
+  // ─── Prise de parole (« main levée ») ───
+  /** Mon statut : null (rien), EN_ATTENTE (file) ou ACCORDEE (tribune). */
+  const [myParole, setMyParole] = useState<StatutParole>(null);
+  /** Les citoyens actuellement à la tribune — visible de toute la salle. */
+  const [tribune, setTribune] = useState<EntreeParole[]>([]);
+  /** File des mains levées — seul le staff la reçoit. */
+  const [paroleQueue, setParoleQueue] = useState<EntreeParole[]>([]);
+  /** Passe à vrai quand le modérateur vient de m'inviter (feuille à ouvrir). */
+  const [paroleInvitation, setParoleInvitation] = useState(false);
   const socketRef = useRef<Socket | null>(null);
 
   useEffect(() => {
@@ -118,6 +142,9 @@ export function useLiveDebat(debatId: string | undefined) {
             (ack.messages ?? []).map((message) => ({ ...message, estMoi: false }))
           );
           setRole(ack.roleParticipation ?? null);
+          setMyParole(ack.parole?.maDemande ?? null);
+          setTribune(ack.parole?.tribune ?? []);
+          setParoleQueue(ack.parole?.file ?? []);
           setState('joined');
         } else {
           // Le serveur refuse notamment un débat qui n'est plus en cours.
@@ -169,6 +196,26 @@ export function useLiveDebat(debatId: string | undefined) {
       setMessages((current) =>
         current.filter((message) => message.id !== messageId)
       );
+    });
+
+    socket.on('tribune.maj', ({ tribune: maj }: { tribune: EntreeParole[] }) => {
+      setTribune(maj ?? []);
+    });
+
+    socket.on('parole.file', ({ file }: { file: EntreeParole[] }) => {
+      setParoleQueue(file ?? []);
+    });
+
+    socket.on('parole.statut', ({ statut }: { statut: string }) => {
+      if (statut === 'ACCORDEE') {
+        setMyParole('ACCORDEE');
+        // Ouvre la feuille d'invitation : le citoyen accepte ou décline.
+        setParoleInvitation(true);
+      } else {
+        // REFUSEE ou TERMINEE : retour à l'état de départ, il peut redemander.
+        setMyParole(null);
+        setParoleInvitation(false);
+      }
     });
 
     socket.on('debat.cloture', ({ debatId: closedId }: { debatId: string }) => {
@@ -253,6 +300,56 @@ export function useLiveDebat(debatId: string | undefined) {
     [debatId]
   );
 
+  // ─── Prise de parole ────────────────────────────────────────────────
+
+  /** Lever la main. L'état n'avance que si le serveur accepte. */
+  const requestSpeech = useCallback(() => {
+    socketRef.current?.emit(
+      'parole.demander',
+      { debatId },
+      (ack: { ok: boolean }) => {
+        if (ack?.ok) setMyParole('EN_ATTENTE');
+      }
+    );
+  }, [debatId]);
+
+  /** Retirer sa main levée avant la décision du modérateur. */
+  const cancelSpeech = useCallback(() => {
+    socketRef.current?.emit(
+      'parole.annuler',
+      { debatId },
+      (ack: { ok: boolean }) => {
+        if (ack?.ok) setMyParole(null);
+      }
+    );
+  }, [debatId]);
+
+  /** Quitter la tribune (ou décliner l'invitation). */
+  const leaveStage = useCallback(() => {
+    setParoleInvitation(false);
+    socketRef.current?.emit(
+      'parole.redescendre',
+      { debatId },
+      (ack: { ok: boolean }) => {
+        if (ack?.ok) setMyParole(null);
+      }
+    );
+  }, [debatId]);
+
+  /** Le citoyen a accepté l'invitation — on referme simplement la feuille. */
+  const acceptStage = useCallback(() => setParoleInvitation(false), []);
+
+  /** Staff : inviter à la tribune / refuser / faire redescendre. */
+  const grantSpeech = useCallback((demandeId: string) => {
+    socketRef.current?.emit('parole.accorder', { demandeId });
+  }, []);
+  const denySpeech = useCallback((demandeId: string) => {
+    socketRef.current?.emit('parole.refuser', { demandeId });
+  }, []);
+  const removeFromStage = useCallback((demandeId: string) => {
+    socketRef.current?.emit('parole.retirer', { demandeId });
+  }, []);
+
   const isStaff = role === 'MODERATEUR' || role === 'INTERVENANT';
 
   return {
@@ -266,5 +363,17 @@ export function useLiveDebat(debatId: string | undefined) {
     sendMessage,
     deleteMessage,
     report,
+    // Prise de parole
+    myParole,
+    tribune,
+    paroleQueue,
+    paroleInvitation,
+    requestSpeech,
+    cancelSpeech,
+    leaveStage,
+    acceptStage,
+    grantSpeech,
+    denySpeech,
+    removeFromStage,
   };
 }

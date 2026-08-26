@@ -11,8 +11,10 @@ import { io, type Socket } from "socket.io-client";
 import {
   CheckCircle2,
   Flag,
+  Hand,
   ListChecks,
   Lock,
+  Mic,
   Send,
   ShieldCheck,
   Trash2,
@@ -60,6 +62,13 @@ interface AffirmationDirect {
   invalides: number;
 }
 
+/** Une main levée (file) ou un citoyen à la tribune. */
+interface EntreeParole {
+  id: string;
+  nom: string;
+  depuis: string;
+}
+
 type EtatSalle = "connexion" | "en-salle" | "clos" | "erreur";
 
 export function ConsoleDirect({
@@ -80,6 +89,10 @@ export function ConsoleDirect({
   const [affirmations, setAffirmations] = useState<AffirmationDirect[]>([]);
   const [signalements, setSignalements] =
     useState<SignalementAdmin[]>(signalementsInitiaux);
+  /** Mains levées des citoyens qui demandent la parole. */
+  const [fileParole, setFileParole] = useState<EntreeParole[]>([]);
+  /** Citoyens actuellement à la tribune (2 places max, côté serveur). */
+  const [tribune, setTribune] = useState<EntreeParole[]>([]);
 
   const [brouillon, setBrouillon] = useState("");
   const [texteAffirmation, setTexteAffirmation] = useState("");
@@ -106,10 +119,13 @@ export function ConsoleDirect({
           message?: string;
           affirmations?: AffirmationDirect[];
           messages?: MessageDirect[];
+          parole?: { tribune?: EntreeParole[]; file?: EntreeParole[] };
         }) => {
           if (ack?.ok) {
             setAffirmations(ack.affirmations ?? []);
             setMessages(ack.messages ?? []);
+            setFileParole(ack.parole?.file ?? []);
+            setTribune(ack.parole?.tribune ?? []);
             setEtat("en-salle");
           } else {
             setEtat(ack?.message?.includes("TERMINE") ? "clos" : "erreur");
@@ -173,6 +189,14 @@ export function ConsoleDirect({
                 ...courants,
               ],
         ),
+    );
+
+    socket.on("parole.file", ({ file }: { file: EntreeParole[] }) =>
+      setFileParole(file ?? []),
+    );
+
+    socket.on("tribune.maj", ({ tribune: maj }: { tribune: EntreeParole[] }) =>
+      setTribune(maj ?? []),
     );
 
     socket.on("debat.cloture", ({ debatId }: { debatId: string }) => {
@@ -253,6 +277,18 @@ export function ConsoleDirect({
         ),
       );
     });
+
+  // Prise de parole : décisions instantanées, directement par la socket —
+  // le serveur revérifie le rôle staff à chaque événement.
+  const inviterALaTribune = useCallback((demandeId: string) => {
+    socketRef.current?.emit("parole.accorder", { demandeId });
+  }, []);
+  const refuserLaParole = useCallback((demandeId: string) => {
+    socketRef.current?.emit("parole.refuser", { demandeId });
+  }, []);
+  const retirerDeLaTribune = useCallback((demandeId: string) => {
+    socketRef.current?.emit("parole.retirer", { demandeId });
+  }, []);
 
   const enSalle = etat === "en-salle";
   const enAttente = signalements.filter((s) => s.statut === "EN_ATTENTE");
@@ -405,6 +441,90 @@ export function ConsoleDirect({
       </Card>
 
       <div className="space-y-5">
+        {/* ─── Prise de parole (« main levée ») ────────────────────── */}
+        <Card>
+          <CardHeader
+            title="Prise de parole"
+            description="Les citoyens lèvent la main ; vous les invitez à la tribune (2 places)."
+            action={
+              fileParole.length > 0 ? (
+                <Badge tone="warning" dot>
+                  {fileParole.length} main{fileParole.length > 1 ? "s" : ""} levée
+                  {fileParole.length > 1 ? "s" : ""}
+                </Badge>
+              ) : undefined
+            }
+          />
+
+          {/* La tribune : qui s'exprime en ce moment. */}
+          {tribune.length > 0 && (
+            <ul className="mt-4 space-y-2">
+              {tribune.map((invite) => (
+                <li
+                  key={invite.id}
+                  className="flex items-center gap-3 rounded-lg bg-primary-pale p-3 ring-1 ring-hairline"
+                >
+                  <span className="grid size-8 shrink-0 place-items-center rounded-full bg-primary text-ink-inverse">
+                    <Mic className="size-4" aria-hidden />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[14px] font-bold text-ink">{invite.nom}</p>
+                    <p className="text-[12px] text-ink-subtle">
+                      À la tribune {formatRelative(invite.depuis)}
+                    </p>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => retirerDeLaTribune(invite.id)}
+                    disabled={!enSalle}
+                  >
+                    Retirer
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          {/* La file d'attente, plus ancienne demande en premier. */}
+          <ul className="mt-4 space-y-2">
+            {tribune.length === 0 && fileParole.length === 0 && (
+              <li className="rounded-lg bg-surface-raised p-3 text-center text-[13px] text-ink-muted">
+                Aucune main levée pour l&apos;instant.
+              </li>
+            )}
+            {fileParole.map((demande) => (
+              <li
+                key={demande.id}
+                className="flex items-center gap-3 rounded-lg bg-surface-raised p-3 ring-1 ring-hairline"
+              >
+                <Hand className="size-4 shrink-0 text-warning" aria-hidden />
+                <div className="min-w-0 flex-1">
+                  <p className="text-[14px] font-semibold text-ink">{demande.nom}</p>
+                  <p className="text-[12px] text-ink-subtle">
+                    {formatRelative(demande.depuis)}
+                  </p>
+                </div>
+                <Button
+                  size="sm"
+                  onClick={() => inviterALaTribune(demande.id)}
+                  disabled={!enSalle}
+                >
+                  Inviter
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => refuserLaParole(demande.id)}
+                  disabled={!enSalle}
+                >
+                  Refuser
+                </Button>
+              </li>
+            ))}
+          </ul>
+        </Card>
+
         {/* ─── Affirmations au vote ────────────────────────────────── */}
         <Card>
           <CardHeader

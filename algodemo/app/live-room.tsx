@@ -7,6 +7,7 @@ import {
   ActivityIndicator,
   TextInput,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   Pressable,
   Alert,
@@ -17,7 +18,14 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Animated from 'react-native-reanimated';
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+  withRepeat,
+  withSequence,
+  withTiming,
+  interpolate,
+} from 'react-native-reanimated';
 import { StatusBar } from 'expo-status-bar';
 import { useAccessibility } from '../hooks/useAccessibility';
 import {
@@ -105,6 +113,17 @@ export default function LiveRoomScreen() {
     sendMessage,
     deleteMessage,
     report,
+    myParole,
+    tribune,
+    paroleQueue,
+    paroleInvitation,
+    requestSpeech,
+    cancelSpeech,
+    leaveStage,
+    acceptStage,
+    grantSpeech,
+    denySpeech,
+    removeFromStage,
   } = useLiveDebat(id);
 
   const { user } = useAuthStore();
@@ -549,6 +568,176 @@ export default function LiveRoomScreen() {
             ))}
           </Animated.View>
 
+          {/* ─── Tribune citoyenne (« main levée ») ──────────────── */}
+          {state === 'joined' && !isEnded && (
+            <Animated.View
+              entering={enterListItem(2)}
+              style={[styles.card, { backgroundColor: colors.surface }, shadows.sm]}
+            >
+              <View style={styles.pollHeader}>
+                <MaterialCommunityIcons
+                  name="hand-back-right"
+                  size={18}
+                  color={colors.primary}
+                />
+                <Text
+                  style={{
+                    color: colors.primary,
+                    fontSize: getFontSize(typography.sizes.caption),
+                    fontFamily: typography.families.bodyBold,
+                    letterSpacing: 0.6,
+                  }}
+                >
+                  {t('liveRoom.tribuneTitle').toUpperCase()}
+                </Text>
+              </View>
+
+              {/* Les invités qui s'expriment — visibles de toute la salle. */}
+              {tribune.length > 0 ? (
+                <View style={styles.tribuneRow}>
+                  {tribune.map((invite) => (
+                    <TribuneChip
+                      key={invite.id}
+                      nom={invite.nom}
+                      badge={t('liveRoom.citizenBadge')}
+                      onRemove={
+                        isStaff ? () => removeFromStage(invite.id) : undefined
+                      }
+                      removeLabel={t('liveRoom.removeFromStage')}
+                    />
+                  ))}
+                </View>
+              ) : (
+                <Text
+                  style={{
+                    color: colors.textSecondary,
+                    fontSize: getFontSize(typography.sizes.bodySmall),
+                    fontFamily: typography.families.body,
+                    lineHeight: 19,
+                  }}
+                >
+                  {t('liveRoom.tribuneEmpty')}
+                </Text>
+              )}
+
+              {/* Mes commandes de prise de parole (citoyens uniquement). */}
+              {!isStaff && myParole === null && (
+                <Button
+                  label={`✋ ${t('liveRoom.requestSpeech')}`}
+                  onPress={requestSpeech}
+                  variant="primary"
+                  size="sm"
+                  haptic="medium"
+                  style={styles.paroleAction}
+                />
+              )}
+              {!isStaff && myParole === 'EN_ATTENTE' && (
+                <View style={styles.paroleAction}>
+                  <Text
+                    style={{
+                      color: colors.textSecondary,
+                      fontSize: getFontSize(typography.sizes.caption),
+                      fontFamily: typography.families.bodySemiBold,
+                      marginBottom: spacing.sm,
+                    }}
+                  >
+                    ✋ {t('liveRoom.speechPending')}
+                  </Text>
+                  <Button
+                    label={t('liveRoom.cancelRequest')}
+                    onPress={cancelSpeech}
+                    variant="outline"
+                    size="sm"
+                    haptic="light"
+                  />
+                </View>
+              )}
+              {!isStaff && myParole === 'ACCORDEE' && (
+                <View
+                  style={[
+                    styles.onStageBanner,
+                    { backgroundColor: withAlpha(colors.success, 0.1) },
+                  ]}
+                >
+                  <Ionicons name="mic" size={18} color={colors.success} />
+                  <View style={styles.flex}>
+                    <Text
+                      style={{
+                        color: colors.success,
+                        fontSize: getFontSize(typography.sizes.caption),
+                        fontFamily: typography.families.bodyBold,
+                      }}
+                    >
+                      {t('liveRoom.onStage')}
+                    </Text>
+                    <Text
+                      style={{
+                        color: colors.textSecondary,
+                        fontSize: getFontSize(typography.sizes.micro),
+                        fontFamily: typography.families.body,
+                      }}
+                    >
+                      {t('liveRoom.onStageHint')}
+                    </Text>
+                  </View>
+                  <Button
+                    label={t('liveRoom.leaveStage')}
+                    onPress={leaveStage}
+                    variant="outline"
+                    size="sm"
+                    haptic="light"
+                  />
+                </View>
+              )}
+
+              {/* File des mains levées — modérateur et intervenants. */}
+              {isStaff && paroleQueue.length > 0 && (
+                <View style={styles.paroleAction}>
+                  <Text
+                    style={{
+                      color: colors.textTertiary,
+                      fontSize: getFontSize(typography.sizes.micro),
+                      fontFamily: typography.families.bodyBold,
+                      letterSpacing: 0.6,
+                      marginBottom: spacing.sm,
+                    }}
+                  >
+                    {t('liveRoom.queueTitle').toUpperCase()} · {paroleQueue.length}
+                  </Text>
+                  {paroleQueue.map((demande) => (
+                    <View key={demande.id} style={styles.queueRow}>
+                      <Text
+                        numberOfLines={1}
+                        style={{
+                          flex: 1,
+                          color: colors.textPrimary,
+                          fontSize: getFontSize(typography.sizes.bodySmall),
+                          fontFamily: typography.families.bodySemiBold,
+                        }}
+                      >
+                        ✋ {demande.nom}
+                      </Text>
+                      <Button
+                        label={t('liveRoom.queueInvite')}
+                        onPress={() => grantSpeech(demande.id)}
+                        variant="primary"
+                        size="sm"
+                        haptic="medium"
+                      />
+                      <Button
+                        label={t('liveRoom.queueDeny')}
+                        onPress={() => denySpeech(demande.id)}
+                        variant="outline"
+                        size="sm"
+                        haptic="light"
+                      />
+                    </View>
+                  ))}
+                </View>
+              )}
+            </Animated.View>
+          )}
+
           {/* ─── Fil de discussion ───────────────────────────────── */}
           {(state === 'joined' || state === 'ended') && (
             <>
@@ -754,9 +943,212 @@ export default function LiveRoomScreen() {
           </View>
         )}
       </KeyboardAvoidingView>
+
+      {/* ─── Invitation à la tribune ─────────────────────────────── */}
+      <Modal
+        visible={paroleInvitation && myParole === 'ACCORDEE'}
+        transparent
+        animationType="slide"
+        onRequestClose={leaveStage}
+      >
+        <View style={styles.inviteBackdrop}>
+          <View
+            style={[styles.inviteSheet, { backgroundColor: colors.surface }, shadows.lg]}
+          >
+            <View
+              style={[
+                styles.inviteIcon,
+                { backgroundColor: withAlpha(colors.primary, 0.12) },
+              ]}
+            >
+              <Ionicons name="mic" size={30} color={colors.primary} />
+            </View>
+            <Text
+              style={{
+                color: colors.textPrimary,
+                fontSize: getFontSize(typography.sizes.h3),
+                fontFamily: typography.families.heading,
+                textAlign: 'center',
+              }}
+            >
+              {t('liveRoom.inviteTitle')}
+            </Text>
+            <Text
+              style={{
+                color: colors.textSecondary,
+                fontSize: getFontSize(typography.sizes.bodySmall),
+                fontFamily: typography.families.body,
+                textAlign: 'center',
+                lineHeight: 20,
+              }}
+            >
+              {t('liveRoom.inviteBody')}
+            </Text>
+            {/* Consentement explicite : diffusion publique + replay (RGPD). */}
+            <Text
+              style={{
+                color: colors.textTertiary,
+                fontSize: getFontSize(typography.sizes.micro),
+                fontFamily: typography.families.body,
+                textAlign: 'center',
+                lineHeight: 16,
+              }}
+            >
+              {t('liveRoom.inviteConsent')}
+            </Text>
+            <Button
+              label={t('liveRoom.inviteAccept')}
+              onPress={() => {
+                void Haptics.notificationAsync(
+                  Haptics.NotificationFeedbackType.Success
+                );
+                acceptStage();
+              }}
+              variant="primary"
+              haptic="medium"
+            />
+            <Button
+              label={t('liveRoom.inviteDecline')}
+              onPress={leaveStage}
+              variant="ghost"
+              size="sm"
+              haptic="light"
+            />
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
+
+/**
+ * Invité à la tribune : avatar aux initiales entouré d'un halo qui respire —
+ * le signal visuel « cette personne s'exprime ». Le staff dispose d'une
+ * croix pour le faire redescendre instantanément (kill switch).
+ */
+function TribuneChip({
+  nom,
+  badge,
+  onRemove,
+  removeLabel,
+}: {
+  nom: string;
+  badge: string;
+  onRemove?: () => void;
+  removeLabel: string;
+}) {
+  const { colors, getFontSize } = useAccessibility();
+  const souffle = useSharedValue(0);
+
+  useEffect(() => {
+    souffle.value = withRepeat(
+      withSequence(
+        withTiming(1, { duration: 1100 }),
+        withTiming(0, { duration: 1100 })
+      ),
+      -1,
+      false
+    );
+  }, [souffle]);
+
+  const haloStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(souffle.value, [0, 1], [0.35, 0]),
+    transform: [{ scale: interpolate(souffle.value, [0, 1], [1, 1.45]) }],
+  }));
+
+  return (
+    <View style={tribuneStyles.chip}>
+      <View style={tribuneStyles.avatarSlot}>
+        <Animated.View
+          style={[
+            tribuneStyles.halo,
+            { backgroundColor: colors.primary },
+            haloStyle,
+          ]}
+        />
+        <View style={[tribuneStyles.avatar, { backgroundColor: colors.primary }]}>
+          <Text
+            style={{
+              color: '#FFFFFF',
+              fontSize: getFontSize(typography.sizes.caption),
+              fontFamily: typography.families.bodyBold,
+            }}
+          >
+            {initialesDe(nom)}
+          </Text>
+        </View>
+      </View>
+      <View>
+        <Text
+          numberOfLines={1}
+          style={{
+            color: colors.textPrimary,
+            fontSize: getFontSize(typography.sizes.caption),
+            fontFamily: typography.families.bodySemiBold,
+            maxWidth: 110,
+          }}
+        >
+          {nom}
+        </Text>
+        <Text
+          style={{
+            color: colors.textTertiary,
+            fontSize: getFontSize(typography.sizes.micro),
+            fontFamily: typography.families.body,
+          }}
+        >
+          {badge}
+        </Text>
+      </View>
+      {onRemove && (
+        <PressableScale
+          onPress={onRemove}
+          scaleTo={0.9}
+          haptic="medium"
+          accessibilityRole="button"
+          accessibilityLabel={removeLabel}
+          style={[tribuneStyles.remove, { backgroundColor: withAlpha(colors.error, 0.12) }]}
+        >
+          <Ionicons name="close" size={14} color={colors.error} />
+        </PressableScale>
+      )}
+    </View>
+  );
+}
+
+const tribuneStyles = StyleSheet.create({
+  chip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  avatarSlot: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  halo: {
+    position: 'absolute',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+  },
+  avatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  remove: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+});
 
 /**
  * Une affirmation soumise à la salle : « Valider / Invalider » tant qu'elle
@@ -1041,6 +1433,50 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  tribuneRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.lg,
+    marginBottom: spacing.sm,
+  },
+  paroleAction: {
+    marginTop: spacing.md,
+  },
+  onStageBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    padding: spacing.md,
+    borderRadius: borderRadius.lg,
+    marginTop: spacing.md,
+  },
+  queueRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginBottom: spacing.sm,
+  },
+  inviteBackdrop: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(0,0,0,0.55)',
+  },
+  inviteSheet: {
+    borderTopLeftRadius: borderRadius.xxl,
+    borderTopRightRadius: borderRadius.xxl,
+    padding: spacing.xl,
+    paddingBottom: spacing.xxl,
+    gap: spacing.md,
+    alignItems: 'stretch',
+  },
+  inviteIcon: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+    alignSelf: 'center',
   },
   voteOption: {
     flex: 1,
