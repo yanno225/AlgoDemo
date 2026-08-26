@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { View, StyleSheet, LayoutChangeEvent, Platform } from 'react-native';
+import React from 'react';
+import { View, StyleSheet, Platform } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -34,36 +34,15 @@ const BAR_HEIGHT = 62;
  * Barre de navigation flottante en verre dépoli.
  *
  * Elle flotte au-dessus du contenu plutôt que de l'ancrer : c'est ce qui
- * permet au fil immersif d'occuper réellement tout l'écran. L'indicateur de
- * l'onglet actif glisse d'une position à l'autre au lieu de sauter.
+ * permet au fil immersif d'occuper réellement tout l'écran. L'onglet actif
+ * s'étire en pilule pleine qui révèle son nom ; les autres se replient en
+ * icône seule — le libellé n'est affiché que là où il est utile.
  */
 export default function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
   const { colors, isDark, getFontSize } = useAccessibility();
   const insets = useSafeAreaInsets();
-  const [trackWidth, setTrackWidth] = useState(0);
 
   const theme = isDark ? glass.dark : glass.light;
-
-  const segmentWidth = trackWidth > 0 ? trackWidth / state.routes.length : 0;
-
-  const indicatorPosition = useSharedValue(state.index);
-
-  React.useEffect(() => {
-    indicatorPosition.value = withSpring(state.index, motion.slide);
-  }, [state.index, indicatorPosition]);
-
-  const activeRouteName = state.routes[state.index]?.name;
-  const isCenterActive = activeRouteName === CENTER_ROUTE;
-
-  const indicatorStyle = useAnimatedStyle(() => ({
-    width: segmentWidth,
-    transform: [{ translateX: indicatorPosition.value * segmentWidth }],
-    // L'onglet central a son propre bouton en relief : l'indicateur
-    // s'efface pour ne pas doubler le signal.
-    opacity: withTiming(isCenterActive ? 0 : 1, { duration: motion.durations.micro }),
-  }));
-
-  const handleLayout = (event: LayoutChangeEvent) => setTrackWidth(event.nativeEvent.layout.width);
 
   const navigate = (routeKey: string, routeName: string, isFocused: boolean) => {
     const event = navigation.emit({
@@ -96,15 +75,7 @@ export default function CustomTabBar({ state, descriptors, navigation }: BottomT
           ]}
         />
 
-        <View style={styles.track} onLayout={handleLayout}>
-          {segmentWidth > 0 && (
-            <Animated.View style={[styles.indicatorSlot, indicatorStyle]} pointerEvents="none">
-              <View
-                style={[styles.indicator, { backgroundColor: withAlpha(colors.primary, 0.12) }]}
-              />
-            </Animated.View>
-          )}
-
+        <View style={styles.track}>
           {state.routes.map((route, index) => {
             const isFocused = state.index === index;
             const { options } = descriptors[route.key];
@@ -141,6 +112,13 @@ interface TabConfig {
   label: string;
 }
 
+/**
+ * Onglet « pilule extensible » : au repos, une icône seule ; actif, l'onglet
+ * gagne de la place (flex animé), une pilule pleine se remplit sous l'icône
+ * et le libellé se déplie à sa droite (maxWidth + opacité). Tout est piloté
+ * par un unique ressort `progress`, pour que largeur, couleur et texte
+ * arrivent exactement ensemble.
+ */
 const TabItem: React.FC<{
   config: TabConfig;
   isFocused: boolean;
@@ -156,49 +134,66 @@ const TabItem: React.FC<{
     progress.value = withSpring(isFocused ? 1 : 0, motion.slide);
   }, [isFocused, progress]);
 
-  const iconStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: interpolate(progress.value, [0, 1], [0, -2]) }],
+  // L'onglet actif s'élargit pendant que ses voisins se resserrent : c'est
+  // ce transfert de place qui donne l'impression que la pilule « s'étire ».
+  const slotStyle = useAnimatedStyle(() => ({
+    flex: 1 + progress.value,
   }));
 
-  const labelStyle = useAnimatedStyle(() => ({
-    color: interpolateColor(progress.value, [0, 1], [inactiveColor, activeColor]),
+  const pillStyle = useAnimatedStyle(() => ({
+    backgroundColor: interpolateColor(
+      progress.value,
+      [0, 1],
+      ['transparent', activeColor]
+    ),
   }));
 
-  const color = isFocused ? activeColor : inactiveColor;
+  const labelWrapStyle = useAnimatedStyle(() => ({
+    // Le texte ne commence à apparaître qu'une fois la pilule bien formée,
+    // et se replie en premier au départ — jamais de libellé orphelin.
+    opacity: interpolate(progress.value, [0.35, 1], [0, 1], 'clamp'),
+    maxWidth: interpolate(progress.value, [0, 1], [0, 104]),
+    transform: [{ translateX: interpolate(progress.value, [0, 1], [-8, 0]) }],
+  }));
+
   const iconName = isFocused ? config.icon.focused : config.icon.default;
+  // Sur la pilule pleine, le contenu passe en blanc pour le contraste.
+  const iconColor = isFocused ? '#FFFFFF' : inactiveColor;
 
   return (
-    <PressableScale
-      onPress={onPress}
-      scaleTo={motion.scale.chip}
-      accessibilityRole="tab"
-      accessibilityState={{ selected: isFocused }}
-      accessibilityLabel={accessibilityLabel}
-      style={styles.tabItem}
-    >
-      <Animated.View style={[styles.tabInner, iconStyle]}>
-        {config.type === 'material' ? (
-          <MaterialCommunityIcons name={iconName as any} size={22} color={color} />
-        ) : (
-          <Ionicons name={iconName as any} size={22} color={color} />
-        )}
-        <Animated.Text
-          numberOfLines={1}
-          style={[
-            styles.tabLabel,
-            {
-              fontSize,
-              fontFamily: isFocused
-                ? typography.families.bodySemiBold
-                : typography.families.body,
-            },
-            labelStyle,
-          ]}
-        >
-          {config.label}
-        </Animated.Text>
-      </Animated.View>
-    </PressableScale>
+    <Animated.View style={[styles.tabSlot, slotStyle]}>
+      <PressableScale
+        onPress={onPress}
+        scaleTo={motion.scale.chip}
+        accessibilityRole="tab"
+        accessibilityState={{ selected: isFocused }}
+        accessibilityLabel={accessibilityLabel}
+        style={styles.tabItem}
+      >
+        <Animated.View style={[styles.pill, pillStyle]}>
+          {config.type === 'material' ? (
+            <MaterialCommunityIcons name={iconName as any} size={22} color={iconColor} />
+          ) : (
+            <Ionicons name={iconName as any} size={22} color={iconColor} />
+          )}
+          <Animated.View style={labelWrapStyle}>
+            <Animated.Text
+              numberOfLines={1}
+              style={[
+                styles.tabLabel,
+                {
+                  fontSize,
+                  color: '#FFFFFF',
+                  fontFamily: typography.families.bodySemiBold,
+                },
+              ]}
+            >
+              {config.label}
+            </Animated.Text>
+          </Animated.View>
+        </Animated.View>
+      </PressableScale>
+    </Animated.View>
   );
 };
 
@@ -319,17 +314,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
-  indicatorSlot: {
-    position: 'absolute',
-    top: 0,
-    bottom: 0,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  indicator: {
-    width: 52,
-    height: 40,
-    borderRadius: borderRadius.md,
+  tabSlot: {
+    height: '100%',
   },
   tabItem: {
     flex: 1,
@@ -337,9 +323,15 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  tabInner: {
+  pill: {
+    flexDirection: 'row',
     alignItems: 'center',
-    gap: 2,
+    justifyContent: 'center',
+    height: 42,
+    paddingHorizontal: spacing.md,
+    borderRadius: borderRadius.full,
+    gap: 6,
+    overflow: 'hidden',
   },
   tabLabel: {
     letterSpacing: 0.1,
