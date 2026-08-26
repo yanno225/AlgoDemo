@@ -12,11 +12,13 @@ import { ResumeDebat } from './entities/resume-debat.entity';
 import { SignalementDebat } from './entities/signalement-debat.entity';
 import { TranscriptionSegment } from './entities/transcription-segment.entity';
 import { MessageDebat } from './entities/message-debat.entity';
+import { DemandeParole } from './entities/demande-parole.entity';
 import { VoteAffirmation } from './entities/vote-affirmation.entity';
 import { DebatsGateway } from './gateway/debats.gateway';
 import { DebatsService } from './services/debats.service';
 import { LiveService } from './services/live.service';
 import { LivekitService } from './services/livekit.service';
+import { ParoleService } from './services/parole.service';
 import { ResumesService } from './services/resumes.service';
 
 /**
@@ -37,6 +39,7 @@ import { ResumesService } from './services/resumes.service';
       ResumeDebat,
       TranscriptionSegment,
       MessageDebat,
+      DemandeParole,
       User, // lecture seule : validation du modérateur désigné
     ]),
     // Repositories Thematique (rattachement des débats)
@@ -48,6 +51,7 @@ import { ResumesService } from './services/resumes.service';
   providers: [
     DebatsService,
     LiveService,
+    ParoleService,
     DebatsGateway,
     LivekitService,
     ResumesService,

@@ -15,6 +15,7 @@ import { Role } from '../../../common/enums/role.enum';
 import { AuthUser } from '../../../common/interfaces/auth-user.interface';
 import { RoleParticipation } from '../enums/debats.enums';
 import { DecompteVotes, LiveService } from '../services/live.service';
+import { ParoleService } from '../services/parole.service';
 
 /**
  * Salle live des débats — namespace WebSocket « /debats » (socket.io).
@@ -29,6 +30,12 @@ import { DecompteVotes, LiveService } from '../services/live.service';
  *   message            { debatId, texte }        → publie dans le fil de discussion
  *   message.supprimer  { messageId }             → modération du fil (staff)
  *   signaler           { debatId, message }      → signale une fausse information au staff
+ *   parole.demander    { debatId }               → lève la main (rejoint la file)
+ *   parole.annuler     { debatId }               → retire sa main levée
+ *   parole.redescendre { debatId }               → quitte la tribune de lui-même
+ *   parole.accorder    { demandeId }             → invite à la tribune (staff)
+ *   parole.refuser     { demandeId }             → refuse la demande (staff)
+ *   parole.retirer     { demandeId }             → fait redescendre un invité (staff)
  *
  * Événements SERVEUR → CLIENT (salle debat:{id}) :
  *   participants.maj      { nombre }
@@ -40,6 +47,9 @@ import { DecompteVotes, LiveService } from '../services/live.service';
  *   message.nouveau       { id, auteur, certifie, texte, creeLe }
  *   message.supprime      { messageId }
  *   signalement.nouveau   { id, message, de } — salle staff uniquement
+ *   parole.file           { file: [{id, nom, depuis}] } — salle staff uniquement
+ *   tribune.maj           { tribune: [{id, nom, depuis}] } — toute la salle
+ *   parole.statut         { statut } — au seul citoyen concerné (accordée/refusée/retirée)
  */
 @WebSocketGateway({ namespace: 'debats', cors: { origin: '*' } })
 export class DebatsGateway implements OnGatewayConnection, OnGatewayDisconnect {
@@ -52,6 +62,7 @@ export class DebatsGateway implements OnGatewayConnection, OnGatewayDisconnect {
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
     private readonly liveService: LiveService,
+    private readonly paroleService: ParoleService,
   ) {}
 
   /** Vérifie le JWT au handshake — connexion refusée sans token valide */
@@ -118,6 +129,15 @@ export class DebatsGateway implements OnGatewayConnection, OnGatewayDisconnect {
         roleParticipation,
         affirmations: await this.liveService.etatDesVotes(debat.id),
         messages: await this.liveService.listerMessages(debat.id),
+        parole: {
+          maDemande: await this.paroleService.maDemande(debat.id, user.id),
+          tribune: await this.paroleService.tribune(debat.id),
+          // La file complète n'est montrée qu'au staff.
+          file:
+            roleParticipation !== RoleParticipation.SPECTATEUR
+              ? await this.paroleService.file(debat.id)
+              : undefined,
+        },
       };
     } catch (e) {
       return { ok: false, message: e instanceof Error ? e.message : 'Erreur' };
@@ -234,6 +254,148 @@ export class DebatsGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
   }
 
+  // ------- Prise de parole (« main levée ») -------
+
+  @SubscribeMessage('parole.demander')
+  async paroleDemander(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() body: { debatId?: string },
+  ) {
+    const user = client.data.user as AuthUser;
+    try {
+      const debatId = body?.debatId ?? '';
+      await this.paroleService.demander(debatId, user);
+      await this.diffuserFile(debatId);
+      return { ok: true, statut: 'EN_ATTENTE' };
+    } catch (e) {
+      return { ok: false, message: e instanceof Error ? e.message : 'Erreur' };
+    }
+  }
+
+  @SubscribeMessage('parole.annuler')
+  async paroleAnnuler(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() body: { debatId?: string },
+  ) {
+    const user = client.data.user as AuthUser;
+    try {
+      const debatId = body?.debatId ?? '';
+      await this.paroleService.annuler(debatId, user);
+      await this.diffuserFile(debatId);
+      return { ok: true };
+    } catch (e) {
+      return { ok: false, message: e instanceof Error ? e.message : 'Erreur' };
+    }
+  }
+
+  @SubscribeMessage('parole.redescendre')
+  async paroleRedescendre(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() body: { debatId?: string },
+  ) {
+    const user = client.data.user as AuthUser;
+    try {
+      const debatId = body?.debatId ?? '';
+      await this.paroleService.redescendre(debatId, user);
+      await this.diffuserTribune(debatId);
+      return { ok: true };
+    } catch (e) {
+      return { ok: false, message: e instanceof Error ? e.message : 'Erreur' };
+    }
+  }
+
+  @SubscribeMessage('parole.accorder')
+  async paroleAccorder(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() body: { demandeId?: string },
+  ) {
+    const user = client.data.user as AuthUser;
+    try {
+      const { demande, debatId } = await this.paroleService.accorder(
+        body?.demandeId ?? '',
+        user,
+      );
+      await this.diffuserFile(debatId);
+      await this.diffuserTribune(debatId);
+      // Le citoyen concerné voit sa feuille d'invitation s'ouvrir.
+      await this.emettreAuCitoyen(debatId, demande.userId, 'parole.statut', {
+        statut: 'ACCORDEE',
+      });
+      return { ok: true };
+    } catch (e) {
+      return { ok: false, message: e instanceof Error ? e.message : 'Erreur' };
+    }
+  }
+
+  @SubscribeMessage('parole.refuser')
+  async paroleRefuser(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() body: { demandeId?: string },
+  ) {
+    const user = client.data.user as AuthUser;
+    try {
+      const { userId, debatId } = await this.paroleService.refuser(
+        body?.demandeId ?? '',
+        user,
+      );
+      await this.diffuserFile(debatId);
+      await this.emettreAuCitoyen(debatId, userId, 'parole.statut', {
+        statut: 'REFUSEE',
+      });
+      return { ok: true };
+    } catch (e) {
+      return { ok: false, message: e instanceof Error ? e.message : 'Erreur' };
+    }
+  }
+
+  @SubscribeMessage('parole.retirer')
+  async paroleRetirer(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() body: { demandeId?: string },
+  ) {
+    const user = client.data.user as AuthUser;
+    try {
+      const { userId, debatId } = await this.paroleService.retirer(
+        body?.demandeId ?? '',
+        user,
+      );
+      await this.diffuserTribune(debatId);
+      await this.emettreAuCitoyen(debatId, userId, 'parole.statut', {
+        statut: 'TERMINEE',
+      });
+      return { ok: true };
+    } catch (e) {
+      return { ok: false, message: e instanceof Error ? e.message : 'Erreur' };
+    }
+  }
+
+  /** File des mains levées — pour les écrans du staff uniquement. */
+  private async diffuserFile(debatId: string): Promise<void> {
+    const file = await this.paroleService.file(debatId);
+    this.server.to(`debat:${debatId}:staff`).emit('parole.file', { file });
+  }
+
+  /** Tribune (invités qui s'expriment) — visible de toute la salle. */
+  private async diffuserTribune(debatId: string): Promise<void> {
+    const tribune = await this.paroleService.tribune(debatId);
+    this.server.to(`debat:${debatId}`).emit('tribune.maj', { tribune });
+  }
+
+  /** Émet un événement au(x) socket(s) d'UN citoyen précis de la salle. */
+  private async emettreAuCitoyen(
+    debatId: string,
+    userId: string,
+    evenement: string,
+    payload: unknown,
+  ): Promise<void> {
+    const sockets = await this.server.in(`debat:${debatId}`).fetchSockets();
+    for (const socket of sockets) {
+      if ((socket.data.user as AuthUser | undefined)?.id === userId) {
+        socket.emit(evenement, payload);
+      }
+    }
+  }
+
   // ------- Diffusions déclenchées par les services REST -------
 
   diffuserDebatDemarre(debatId: string, titre: string): void {
@@ -242,6 +404,8 @@ export class DebatsGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   diffuserDebatCloture(debatId: string): void {
     this.server.to(`debat:${debatId}`).emit('debat.cloture', { debatId });
+    // La file se vide et la tribune redescend avec la fin du direct.
+    void this.paroleService.cloturer(debatId);
   }
 
   diffuserNouvelleAffirmation(debatId: string, id: string, texte: string): void {
