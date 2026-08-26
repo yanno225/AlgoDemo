@@ -41,6 +41,7 @@ import {
   withAlpha,
 } from '../../../../constants/theme';
 import { PressableScale } from '../../../ui/PressableScale';
+import { HeartBurst } from './HeartBurst';
 
 /** Placeholder flou générique — évite le flash blanc avant l'arrivée du média. */
 const BLURHASH = 'L6Pj0^jE.AyE_3t7t7R**0o#DgR4';
@@ -122,6 +123,8 @@ export const ImmersiveCard: React.FC<ImmersiveCardProps> = ({
   const [isSaved, setIsSaved] = useState(false);
   const [showComments, setShowComments] = useState(false);
   const [commentsCount, setCommentsCount] = useState(item.commentsCount ?? 0);
+  // Clé de l'éclat de cœur en cours (double-tap) — null entre deux éclats.
+  const [burstKey, setBurstKey] = useState<number | null>(null);
   // Une seule requête « j'aime » à la fois : la bascule serveur rendrait
   // deux appuis rapprochés incohérents avec l'état affiché.
   const likeEnCours = useRef(false);
@@ -176,7 +179,6 @@ export const ImmersiveCard: React.FC<ImmersiveCardProps> = ({
     if (item.videoUrl) player.muted = isSpeaking;
   }, [isSpeaking, item.videoUrl, player]);
 
-  const burst = useSharedValue(0);
   const likeScale = useSharedValue(1);
 
   const thematic = THEMATICS.find((th) => th.id === item.thematicId);
@@ -301,14 +303,11 @@ export const ImmersiveCard: React.FC<ImmersiveCardProps> = ({
   // Le double-tap aime, mais ne retire jamais : c'est un geste d'approbation,
   // pas une bascule — l'annulation passe par le bouton du rail.
   const likeByDoubleTap = useCallback(() => {
-    burst.value = 0;
-    burst.value = withSequence(
-      withSpring(1, motion.bounce),
-      withDelay(320, withTiming(0, { duration: motion.durations.base }))
-    );
+    // Relancer l'éclat même s'il est en cours : nouvelle clé, nouveau feu.
+    setBurstKey(Date.now());
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     if (!isLiked) applyLike(true);
-  }, [burst, isLiked, applyLike]);
+  }, [isLiked, applyLike]);
 
   const doubleTap = Gesture.Tap()
     .numberOfTaps(2)
@@ -326,14 +325,6 @@ export const ImmersiveCard: React.FC<ImmersiveCardProps> = ({
       scheduleOnRN(togglePause);
     });
   const taps = Gesture.Exclusive(doubleTap, singleTap);
-
-  const burstStyle = useAnimatedStyle(() => ({
-    opacity: burst.value,
-    transform: [
-      { scale: interpolate(burst.value, [0, 1], [0.4, 1.15]) },
-      { rotate: `${interpolate(burst.value, [0, 1], [-18, -6])}deg` },
-    ],
-  }));
 
   const likeStyle = useAnimatedStyle(() => ({
     transform: [{ scale: likeScale.value }],
@@ -394,10 +385,15 @@ export const ImmersiveCard: React.FC<ImmersiveCardProps> = ({
             pointerEvents="none"
           />
 
-          {/* Cœur du double-tap */}
-          <Animated.View style={[styles.burst, burstStyle]} pointerEvents="none">
-            <Ionicons name="heart" size={110} color={withAlpha('#FFFFFF', 0.92)} />
-          </Animated.View>
+          {/* Éclat de cœur du double-tap : gerbe de particules, montée à la
+              demande et démontée par le composant lui-même. */}
+          {burstKey !== null && (
+            <HeartBurst
+              key={burstKey}
+              color={withAlpha('#FFFFFF', 0.92)}
+              onDone={() => setBurstKey(null)}
+            />
+          )}
 
           {/* Indicateur de pause — visible tant que la vidéo est arrêtée. */}
           {isPaused && item.videoUrl && (
@@ -629,11 +625,6 @@ const styles = StyleSheet.create({
   fallbackEmoji: {
     fontSize: 96,
     opacity: 0.5,
-  },
-  burst: {
-    ...StyleSheet.absoluteFillObject,
-    justifyContent: 'center',
-    alignItems: 'center',
   },
   pauseOverlay: {
     ...StyleSheet.absoluteFillObject,

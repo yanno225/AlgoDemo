@@ -4,7 +4,6 @@ import {
   View,
   Text,
   ScrollView,
-  ActivityIndicator,
   Modal,
   Pressable,
 } from 'react-native';
@@ -24,6 +23,7 @@ import { Button } from '../../components/ui/Button';
 import { PressableScale } from '../../components/ui/PressableScale';
 import { BrandLogo } from '../../components/ui/BrandLogo';
 import { CircularProgress } from '../../components/ui/CircularProgress';
+import { Skeleton } from '../../components/ui/Skeleton';
 import { IndicatorDetailSheet } from '../../components/feature/pays/IndicatorDetailSheet';
 import { enterSection, enterListItem } from '../../components/ui/motion';
 import { getCountryProfile } from '../../services/api/fichePays';
@@ -111,7 +111,22 @@ export default function CountryProfileScreen() {
               />
             </>
           ) : (
-            <ActivityIndicator size="large" color={colors.primary} />
+            // Silhouette de la fiche : en-tête, pastilles de thématiques,
+            // synthèse et rangée de jauges — le squelette de l'écran réel.
+            <View style={styles.pendingSkeleton}>
+              <Skeleton height={26} width="55%" />
+              <View style={styles.pendingChips}>
+                <Skeleton height={34} width={92} radius={borderRadius.full} />
+                <Skeleton height={34} width={104} radius={borderRadius.full} />
+                <Skeleton height={34} width={84} radius={borderRadius.full} />
+              </View>
+              <Skeleton height={112} radius={borderRadius.xl} />
+              <View style={styles.pendingGauges}>
+                <Skeleton height={76} width={76} radius={38} />
+                <Skeleton height={76} width={76} radius={38} />
+                <Skeleton height={76} width={76} radius={38} />
+              </View>
+            </View>
           )}
         </View>
       </Screen>
@@ -692,6 +707,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.md,
     paddingHorizontal: spacing.xxl,
+  },
+  pendingSkeleton: {
+    alignSelf: 'stretch',
+    gap: spacing.lg,
+  },
+  pendingChips: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  pendingGauges: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
   },
   emptyDomain: {
     flexDirection: 'row',

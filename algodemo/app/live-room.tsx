@@ -30,7 +30,10 @@ import { PressableScale } from '../components/ui/PressableScale';
 import { Button } from '../components/ui/Button';
 import { SectionHeader } from '../components/ui/SectionHeader';
 import { LiveDot } from '../components/ui/LiveDot';
+import { SuccessCheck } from '../components/ui/SuccessCheck';
+import { AnimatedNumber } from '../components/ui/AnimatedNumber';
 import { ProgressBar } from '../components/feature/participation/ProgressBar';
+import * as Haptics from 'expo-haptics';
 import { enterListItem, enterFade } from '../components/ui/motion';
 import { getDebate, type DebateDetail } from '../services/api/debats';
 import { THEMATICS } from '../constants/thematics';
@@ -777,6 +780,21 @@ function AffirmationBlock({
   const pctValides = total > 0 ? Math.round((affirmation.valides / total) * 100) : 0;
   const isOpen = affirmation.statut === 'OUVERTE' && !disabled;
 
+  // Confirmation visible SEULEMENT quand le serveur a enregistré le vote
+  // (myVote vient du socket) : coche qui se dessine + vibration de succès.
+  const [confirme, setConfirme] = useState(false);
+  const votePrecedent = useRef(myVote);
+  useEffect(() => {
+    if (myVote !== undefined && votePrecedent.current !== myVote) {
+      setConfirme(true);
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      const minuteur = setTimeout(() => setConfirme(false), 1100);
+      votePrecedent.current = myVote;
+      return () => clearTimeout(minuteur);
+    }
+    votePrecedent.current = myVote;
+  }, [myVote]);
+
   return (
     <View>
       <Text
@@ -845,18 +863,24 @@ function AffirmationBlock({
                 >
                   {option.label}
                 </Text>
-                <Text
+                <AnimatedNumber
+                  value={option.count}
+                  duration={550}
                   style={{
                     color: colors.textTertiary,
                     fontSize: getFontSize(typography.sizes.micro),
                     fontFamily: typography.families.bodyBold,
+                    textAlign: 'right',
                   }}
-                >
-                  {option.count}
-                </Text>
+                />
               </PressableScale>
             );
           })}
+          {confirme && (
+            <View style={styles.checkOverlay} pointerEvents="none">
+              <SuccessCheck size={46} color={colors.success} />
+            </View>
+          )}
         </View>
       ) : (
         <Animated.View entering={enterFade()} style={styles.pollResults}>
@@ -1012,6 +1036,11 @@ const styles = StyleSheet.create({
   voteRow: {
     flexDirection: 'row',
     gap: spacing.sm,
+  },
+  checkOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   voteOption: {
     flex: 1,

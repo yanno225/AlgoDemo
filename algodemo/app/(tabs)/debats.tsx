@@ -4,7 +4,6 @@ import {
   View,
   Text,
   ScrollView,
-  ActivityIndicator,
   RefreshControl,
   Linking,
   Alert,
@@ -23,6 +22,7 @@ import { PressableScale } from '../../components/ui/PressableScale';
 import { BrandLogo } from '../../components/ui/BrandLogo';
 import { SectionHeader } from '../../components/ui/SectionHeader';
 import { LiveDot } from '../../components/ui/LiveDot';
+import { Skeleton } from '../../components/ui/Skeleton';
 import { enterListItem, enterSection } from '../../components/ui/motion';
 import { listDebates, type Debate } from '../../services/api/debats';
 import {
@@ -212,7 +212,11 @@ export default function DebatesScreen() {
 
         {isLoading && (
           <View style={styles.loadingBlock}>
-            <ActivityIndicator size="small" color={colors.primary} />
+            {/* Silhouette de l'écran : une grande carte de live puis deux
+                lignes de débats à venir — l'œil sait déjà où regarder. */}
+            <Skeleton height={196} radius={borderRadius.xl} />
+            <Skeleton height={72} radius={borderRadius.lg} style={{ marginTop: spacing.md }} />
+            <Skeleton height={72} radius={borderRadius.lg} style={{ marginTop: spacing.sm }} />
           </View>
         )}
 
@@ -590,8 +594,7 @@ const styles = StyleSheet.create({
     marginTop: spacing.xl,
   },
   loadingBlock: {
-    paddingVertical: spacing.xl,
-    alignItems: 'center',
+    paddingVertical: spacing.sm,
   },
   emptyCard: {
     alignItems: 'center',
