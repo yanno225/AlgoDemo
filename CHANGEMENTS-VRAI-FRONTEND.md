@@ -169,6 +169,20 @@ Toutes dans `src/database/migrations/`, à exécuter avec `npm run migration:run
   général issues des connaissances du modèle, JAMAIS comptées dans le
   verdict et affichées côté app « non vérifié par nos sources ».
 
+## Auth — droits RGPD self-service (NOUVEAU)
+
+- **`GET /auth/users/moi/historique`** (tout compte authentifié) : les 100
+  derniers événements du compte, UNION chronologique de 9 surfaces (avis,
+  émargements de consultations — jamais les choix, débats rejoints, votes
+  d'affirmations, messages, commentaires, signalements terrain/contenus,
+  prises de parole ACCORDEE/TERMINEE). `{ type, libelle, date }`.
+- **`GET /auth/users/moi/donnees`** (tout compte authentifié) : export de
+  portabilité (RGPD art. 20) — profil (sans hash/OTP/2FA), toutes les
+  contributions en clair, note explicite sur le secret du vote (les
+  bulletins sont anonymes par construction et absents de l'export), plus
+  les statistiques. Implémentés dans `UserStatsService` (SQL direct,
+  modules découplés).
+
 ## Auth — statistiques self-service
 
 - **`GET /auth/users/moi/statistiques`** (tout compte) : les compteurs réels
