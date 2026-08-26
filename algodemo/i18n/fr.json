@@ -343,6 +343,44 @@
       "confirmCancel": "Annuler",
       "confirmAction": "Anonymiser",
       "error": "L'anonymisation a échoué. Réessayez."
+    },
+    "confidentialite": {
+      "title": "Confidentialité",
+      "updated": "Dernière mise à jour : août 2026"
+    },
+    "donnees": {
+      "title": "Mes données",
+      "intro": "Vous avez le droit d'emporter une copie de tout ce que la plateforme sait de vous (RGPD, art. 20). L'export est un fichier JSON lisible, généré à la demande.",
+      "contientTitle": "Ce que contient l'export",
+      "contient1": "Votre profil (email, nom, téléphone, consentements)",
+      "contient2": "Vos avis, commentaires et messages de débat",
+      "contient3": "Vos signalements et prises de parole",
+      "contient4": "Vos participations aux consultations — jamais vos choix : les bulletins sont anonymes dès l'enregistrement",
+      "export": "Télécharger mes données (JSON)",
+      "exporting": "Préparation de l'export…",
+      "exportError": "L'export n'a pas pu être généré. Vérifiez votre connexion puis réessayez.",
+      "deleteTitle": "Supprimer mes données",
+      "deleteDesc": "L'anonymisation détache définitivement votre identité de vos contributions.",
+      "deleteAction": "Ouvrir l'anonymisation"
+    },
+    "historique": {
+      "title": "Historique d'activité",
+      "intro": "Vos 100 dernières actions sur la plateforme, telles qu'enregistrées par le serveur.",
+      "empty": "Aucune activité pour l'instant — votre historique se remplira au fil de vos participations.",
+      "error": "L'historique n'a pas pu être chargé.",
+      "retry": "Réessayer",
+      "secretNote": "Les consultations affichent votre participation, jamais votre choix : le secret du vote est garanti par construction.",
+      "types": {
+        "AVIS": "Avis déposé",
+        "VOTE_CONSULTATION": "Participation à une consultation",
+        "DEBAT_REJOINT": "Débat rejoint",
+        "VOTE_DEBAT": "Vote en direct",
+        "MESSAGE_DEBAT": "Message en débat",
+        "COMMENTAIRE": "Commentaire publié",
+        "SIGNALEMENT_TERRAIN": "Signalement de terrain",
+        "SIGNALEMENT_CONTENU": "Contenu signalé",
+        "PRISE_PAROLE": "Prise de parole en direct"
+      }
     }
   },
   "ai": {

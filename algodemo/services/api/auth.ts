@@ -122,6 +122,34 @@ export async function getMyStats(): Promise<MyStats> {
   return data;
 }
 
+/** Une ligne de l'historique d'activité (paramètres → Historique). */
+export interface HistoryEntry {
+  type:
+    | 'AVIS'
+    | 'VOTE_CONSULTATION'
+    | 'DEBAT_REJOINT'
+    | 'VOTE_DEBAT'
+    | 'MESSAGE_DEBAT'
+    | 'COMMENTAIRE'
+    | 'SIGNALEMENT_TERRAIN'
+    | 'SIGNALEMENT_CONTENU'
+    | 'PRISE_PAROLE';
+  libelle: string;
+  date: string;
+}
+
+/** Les 100 derniers événements du compte — jamais les choix de vote. */
+export async function getMyHistory(): Promise<HistoryEntry[]> {
+  const { data } = await apiClient.get<HistoryEntry[]>('/auth/users/moi/historique');
+  return data;
+}
+
+/** Export complet des données du compte (portabilité RGPD, art. 20). */
+export async function getMyDataExport(): Promise<Record<string, unknown>> {
+  const { data } = await apiClient.get<Record<string, unknown>>('/auth/users/moi/donnees');
+  return data;
+}
+
 // ─── Requêtes ────────────────────────────────────────────────────────
 export interface RegisterInput {
   email: string;

@@ -53,6 +53,26 @@ export class UsersAdminController {
     return this.statsService.statistiquesUtilisateur(user.id);
   }
 
+  @Get('moi/historique')
+  @Roles(Role.UTILISATEUR, Role.POINT_FOCAL, Role.ADMIN)
+  @ApiOperation({
+    summary:
+      "Mon historique d'activité chronologique (100 derniers événements, sans les choix de vote)",
+  })
+  monHistorique(@CurrentUser() user: AuthUser) {
+    return this.statsService.historiqueActivite(user.id);
+  }
+
+  @Get('moi/donnees')
+  @Roles(Role.UTILISATEUR, Role.POINT_FOCAL, Role.ADMIN)
+  @ApiOperation({
+    summary:
+      'Export complet de mes données (portabilité RGPD art. 20) — JSON en clair, hors bulletins de vote (anonymes par construction)',
+  })
+  mesDonnees(@CurrentUser() user: AuthUser) {
+    return this.statsService.exportDonnees(user.id);
+  }
+
   @Patch(':id/valider')
   @ApiOperation({ summary: 'ADMIN — valide (ou invalide) un compte' })
   async valider(

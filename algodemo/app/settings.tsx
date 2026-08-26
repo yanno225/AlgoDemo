@@ -36,7 +36,7 @@ const SECTIONS: SettingSection[] = [
     key: 'privacy',
     tone: 'primary',
     items: [
-      { key: 'privacyPolicy', icon: 'shield-checkmark-outline' },
+      { key: 'privacyPolicy', icon: 'shield-checkmark-outline', route: '/parametres/confidentialite' },
       { key: 'privacyCenter', icon: 'eye-outline' },
       { key: 'accountPrivacy', icon: 'lock-closed-outline' },
       { key: 'anonymisation', icon: 'eye-off-outline', route: '/parametres/anonymisation' },
@@ -47,7 +47,7 @@ const SECTIONS: SettingSection[] = [
     tone: 'secondary',
     items: [
       { key: 'accountSecurity', icon: 'shield-outline', route: '/parametres/securite' },
-      { key: 'myData', icon: 'sync-outline' },
+      { key: 'myData', icon: 'sync-outline', route: '/parametres/donnees' },
     ],
   },
   {
@@ -64,7 +64,7 @@ const SECTIONS: SettingSection[] = [
     tone: 'secondary',
     items: [
       { key: 'downloads', icon: 'download-outline' },
-      { key: 'activityHistory', icon: 'time-outline' },
+      { key: 'activityHistory', icon: 'time-outline', route: '/parametres/historique' },
       { key: 'devicePermissions', icon: 'phone-portrait-outline' },
     ],
   },
