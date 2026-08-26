@@ -66,8 +66,38 @@ function estSticker(texte: string): boolean {
   const compact = texte.replace(/\s+/g, '');
   if (!compact || compact.length > 12) return false;
   if (/[\p{L}\p{N}]/u.test(compact)) return false;
-  const graphemes = [...new Intl.Segmenter('fr', { granularity: 'grapheme' }).segment(compact)];
-  return graphemes.length <= 3;
+  return compterSymboles(compact) <= 3;
+}
+
+/**
+ * Nombre de symboles visibles d'une suite d'émojis. `Intl.Segmenter`
+ * n'existe pas dans Hermes (le moteur JS de React Native) — l'utiliser
+ * faisait crasher le rendu des commentaires sur téléphone. À défaut : on
+ * parcourt les points de code en fusionnant ce qui compose un même émoji
+ * (séquences ZWJ 👩‍🚀, sélecteur de variante U+FE0F, teintes de peau 🏽).
+ */
+function compterSymboles(compact: string): number {
+  const ZWJ = 0x200d; // colle deux émojis en un seul symbole (ex. 👩‍🚀)
+  const VS16 = 0xfe0f; // sélecteur de variante « présentation émoji »
+  let total = 0;
+  let enSequence = false; // le point précédent était un ZWJ (émoji composé)
+  for (const point of compact) {
+    const code = point.codePointAt(0) ?? 0;
+    if (code === ZWJ) {
+      enSequence = true;
+      continue;
+    }
+    if (
+      enSequence ||
+      code === VS16 ||
+      (code >= 0x1f3fb && code <= 0x1f3ff) // teintes de peau
+    ) {
+      enSequence = false;
+      continue;
+    }
+    total += 1;
+  }
+  return total;
 }
 
 /**
