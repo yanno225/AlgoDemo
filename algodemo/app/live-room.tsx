@@ -18,6 +18,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Constants, { ExecutionEnvironment } from 'expo-constants';
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
@@ -689,6 +690,24 @@ export default function LiveRoomScreen() {
                   />
                 </View>
               )}
+              {/* Honnêteté d'abord : dans Expo Go, le SDK LiveKit (audio réel)
+                  n'est pas chargeable — on le DIT au lieu de laisser un micro
+                  muet sans explication. La note disparaît en build installé. */}
+              {!isStaff &&
+                myParole === 'ACCORDEE' &&
+                Constants.executionEnvironment === ExecutionEnvironment.StoreClient && (
+                  <Text
+                    style={{
+                      color: colors.textTertiary,
+                      fontSize: getFontSize(typography.sizes.micro),
+                      fontFamily: typography.families.body,
+                      lineHeight: 15,
+                      marginTop: spacing.sm,
+                    }}
+                  >
+                    {t('liveRoom.onStageExpoGoNote')}
+                  </Text>
+                )}
 
               {/* File des mains levées — modérateur et intervenants. */}
               {isStaff && paroleQueue.length > 0 && (

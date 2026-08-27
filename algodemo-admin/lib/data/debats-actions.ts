@@ -102,6 +102,27 @@ export async function cloturerDebat(formData: FormData) {
   revalidatePath(`/debats/${id}/direct`);
 }
 
+/** Annule un débat planifié — il sort des écrans citoyens, reste tracé. */
+export async function annulerDebat(formData: FormData) {
+  await requireSectionAccess("/debats");
+  const id = String(formData.get("id") ?? "");
+  if (!id) return;
+  await apiFetch(`/debats/${id}/annuler`, { methode: "PATCH" });
+  invalider();
+}
+
+/**
+ * Suppression définitive (ADMIN). Le backend refuse un direct EN COURS ;
+ * les participations, votes et messages partent avec (FK en cascade).
+ */
+export async function supprimerDebat(formData: FormData) {
+  await requireSectionAccess("/debats");
+  const id = String(formData.get("id") ?? "");
+  if (!id) return;
+  await apiFetch(`/debats/${id}`, { methode: "DELETE" });
+  invalider();
+}
+
 // ─── Console du direct ───────────────────────────────────────────────
 
 /**

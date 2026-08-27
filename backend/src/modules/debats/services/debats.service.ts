@@ -153,8 +153,30 @@ export class DebatsService {
     return this.debatRepo.save(debat);
   }
 
+  /**
+   * Annule un débat planifié : il disparaît des écrans publics mais reste en
+   * base (traçabilité). Un direct en cours se CLÔTURE, il ne s'annule pas.
+   */
+  async annuler(id: string): Promise<Debat> {
+    const debat = await this.findOne(id);
+    if (debat.statut !== StatutDebat.PLANIFIE) {
+      throw new BadRequestException(
+        `Le débat est ${debat.statut} — seul un débat planifié peut être annulé`,
+      );
+    }
+    debat.statut = StatutDebat.ANNULE;
+    return this.debatRepo.save(debat);
+  }
+
   async remove(id: string): Promise<void> {
     const debat = await this.findOne(id);
+    // Garde-fou : on ne supprime jamais un direct EN COURS — il se clôture
+    // d'abord. Les FK en cascade emportent participations, votes, messages.
+    if (debat.statut === StatutDebat.EN_COURS) {
+      throw new BadRequestException(
+        'Ce débat est en direct — clôturez-le avant de le supprimer',
+      );
+    }
     await this.debatRepo.remove(debat);
   }
 

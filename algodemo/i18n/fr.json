@@ -220,6 +220,7 @@
     "cancelRequest": "Annuler ma demande",
     "onStage": "Vous êtes à la tribune",
     "onStageHint": "La salle vous écoute — exprimez-vous avec respect.",
+    "onStageExpoGoNote": "⚠️ Micro non actif dans Expo Go : la diffusion audio exige l'application installée (build de développement, avec la vidéo du direct). La gestion de la parole, elle, est déjà réelle.",
     "leaveStage": "Redescendre",
     "inviteTitle": "À vous la parole !",
     "inviteBody": "Le modérateur vous invite à vous exprimer devant la salle.",

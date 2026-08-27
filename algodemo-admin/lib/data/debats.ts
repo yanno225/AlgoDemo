@@ -9,7 +9,7 @@ import { apiFetch } from "@/lib/api/client";
  * est remplacée, pas traduite.
  */
 
-export type StatutDebat = "PLANIFIE" | "EN_COURS" | "TERMINE";
+export type StatutDebat = "PLANIFIE" | "EN_COURS" | "TERMINE" | "ANNULE";
 
 export interface DebatAdmin {
   id: string;

@@ -28,7 +28,7 @@ interface BackendDebate {
   id: string;
   titre: string;
   description: string | null;
-  statut: 'PLANIFIE' | 'EN_COURS' | 'TERMINE';
+  statut: 'PLANIFIE' | 'EN_COURS' | 'TERMINE' | 'ANNULE';
   dateDebut: string;
   urlReplay: string | null;
   urlCouverture: string | null;
@@ -66,6 +66,9 @@ const STATUS_MAP: Record<BackendDebate['statut'], DebateStatus> = {
   PLANIFIE: 'upcoming',
   EN_COURS: 'live',
   TERMINE: 'ended',
+  // Un débat annulé est filtré des listes ; s'il est ouvert par un lien
+  // direct, il se comporte comme un direct terminé (écran de sortie propre).
+  ANNULE: 'ended',
 };
 
 // Le backend identifie les thématiques par libellé libre ; l'app par slug de
@@ -102,7 +105,8 @@ export async function listDebates(filter?: DebateFilter): Promise<Debate[]> {
   const { data } = await apiClient.get<BackendDebate[]>('/debats', {
     params: filter ? { filtre: filter } : undefined,
   });
-  return data.map(mapDebate);
+  // Un débat annulé n'a plus sa place sur les écrans citoyens.
+  return data.filter((debat) => debat.statut !== 'ANNULE').map(mapDebate);
 }
 
 /** Détail d'un débat, affirmations comprises (GET /debats/:id, public). */

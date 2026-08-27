@@ -25,6 +25,7 @@ import { formatDate, formatTime } from "@/lib/format";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Tabs } from "@/components/ui/Tabs";
 import { Badge } from "@/components/ui/Badge";
+import { ActionsDebatPlanifie } from "@/components/debats/ActionsDebatPlanifie";
 import { Button } from "@/components/ui/Button";
 import { Card, CardHeader } from "@/components/ui/Card";
 import { StatusDot } from "@/components/ui/StatusDot";
@@ -66,6 +67,9 @@ export default async function DebatsPage({
     .sort((a, b) => a.dateDebut.localeCompare(b.dateDebut));
   const termines = debats
     .filter((debat) => debat.statut === "TERMINE")
+    .sort((a, b) => b.dateDebut.localeCompare(a.dateDebut));
+  const annules = debats
+    .filter((debat) => debat.statut === "ANNULE")
     .sort((a, b) => b.dateDebut.localeCompare(a.dateDebut));
 
   const ouvertes = consultations.filter(estOuverte);
@@ -246,6 +250,7 @@ export default async function DebatsPage({
                         Démarrer le direct
                       </Button>
                     </form>
+                    <ActionsDebatPlanifie debatId={debat.id} titre={debat.titre} />
                   </Card>
                 ))}
               </div>
@@ -258,6 +263,47 @@ export default async function DebatsPage({
               </Card>
             )}
           </section>
+
+          {/* ─── Annulés ─────────────────────────────────────────────── */}
+          {annules.length > 0 && (
+            <section>
+              <h2 className="mb-4 flex items-center gap-2 font-heading text-[17px] font-bold text-ink">
+                <CalendarClock className="size-4 text-ink-subtle" aria-hidden />
+                Annulés · {annules.length}
+              </h2>
+              <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+                {annules.map((debat, index) => (
+                  <Card
+                    key={debat.id}
+                    className="animate-rise opacity-75"
+                    style={{ animationDelay: `${index * 40}ms` }}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <span
+                        className="size-2.5 shrink-0 translate-y-1.5 rounded-full bg-ink-subtle"
+                        aria-hidden
+                      />
+                      <div className="min-w-0 flex-1">
+                        <h3 className="text-[14px] font-bold leading-snug text-ink">
+                          {debat.titre}
+                        </h3>
+                        <p className="mt-1 text-[12px] text-ink-subtle">
+                          Était prévu le {formatDate(debat.dateDebut)} ·{" "}
+                          {formatTime(debat.dateDebut)}
+                        </p>
+                      </div>
+                      <Badge tone="neutral">Annulé</Badge>
+                    </div>
+                    <ActionsDebatPlanifie
+                      debatId={debat.id}
+                      titre={debat.titre}
+                      annulable={false}
+                    />
+                  </Card>
+                ))}
+              </div>
+            </section>
+          )}
 
           {/* ─── Terminés ────────────────────────────────────────────── */}
           {termines.length > 0 && (
