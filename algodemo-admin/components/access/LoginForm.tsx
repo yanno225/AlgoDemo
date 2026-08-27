@@ -11,16 +11,6 @@ import {
   type EtatConnexion,
 } from "@/lib/auth/etat-connexion";
 
-/**
- * Compte d'amorçage créé par `npm run seed` côté backend.
- *
- * ⚠️ À retirer avant la mise en production : aucun identifiant ne doit
- * subsister dans le livrable final.
- */
-const DEMO_ACCOUNTS = [
-  { email: "admin@algodemo.local", role: "Administrateur (dev)" },
-];
-
 /** Aligné sur la règle du backend : 8 caractères minimum. */
 const MIN_PASSWORD_LENGTH = 8;
 
@@ -222,46 +212,12 @@ export function LoginForm({ action }: LoginFormProps) {
             : "Se connecter"}
       </Button>
 
-      {/* ─── Comptes de démonstration ─────────────────────────────── */}
-      <div className="rounded-xl bg-surface-raised p-4 ring-1 ring-hairline">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-secondary">
-          Comptes de démonstration
-        </p>
-
-        <ul className="mt-3 space-y-2">
-          {DEMO_ACCOUNTS.map((account) => (
-            <li key={account.email}>
-              <button
-                type="button"
-                onClick={() => {
-                  setEmail(account.email);
-                  setSubmitted(false);
-                }}
-                className={cn(
-                  "flex w-full items-center justify-between gap-3 rounded-lg bg-surface px-3 py-2.5",
-                  "ring-1 transition-all duration-150 hover:-translate-y-px hover:shadow-sm",
-                  email === account.email
-                    ? "ring-primary/40"
-                    : "ring-hairline hover:ring-primary/25"
-                )}
-              >
-                <span className="truncate font-mono text-[13px] text-ink">
-                  {account.email}
-                </span>
-                <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wider text-ink-subtle">
-                  {account.role}
-                </span>
-              </button>
-            </li>
-          ))}
-        </ul>
-
-        <p className="mt-3 text-[12px] leading-relaxed text-ink-subtle">
-          Cliquez un compte pour le pré-remplir. Le mot de passe est vérifié
-          par l&apos;API — celui du compte d&apos;amorçage est créé par{" "}
-          <span className="font-mono">npm run seed</span>.
-        </p>
-      </div>
+      {/* Rappel de périmètre : cet accès est nominatif et tracé — chaque
+          action authentifiée est journalisée côté serveur (audit_logs). */}
+      <p className="flex items-center justify-center gap-2 pt-1 text-[12px] text-ink-subtle">
+        <ShieldCheck className="size-3.5 shrink-0 text-success" aria-hidden />
+        Accès réservé à l&apos;équipe FID — connexions vérifiées et journalisées.
+      </p>
 
       {/* Repère discret : l'état du bouton ne dit pas pourquoi il refuse. */}
       {submitted && !isValid && (

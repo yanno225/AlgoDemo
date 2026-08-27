@@ -347,72 +347,157 @@ export default function CountryProfileScreen() {
           <Pressable style={StyleSheet.absoluteFill} onPress={() => setShowSources(false)} />
           <View style={[styles.sourcesSheet, { backgroundColor: colors.surface }, shadows.md]}>
             <View style={[styles.sourcesGrabber, { backgroundColor: colors.border }]} />
-            <Text
-              style={{
-                color: colors.textPrimary,
-                fontSize: getFontSize(typography.sizes.h4),
-                fontFamily: typography.families.headingSemiBold,
-                marginBottom: spacing.xs,
-              }}
-            >
-              {t('pays.sources')}
-            </Text>
-            <Text
-              style={{
-                color: colors.textTertiary,
-                fontSize: getFontSize(typography.sizes.caption),
-                fontFamily: typography.families.body,
-                marginBottom: spacing.md,
-              }}
-            >
-              {activeDomain?.sectionTitleKey}
-            </Text>
-            <ScrollView showsVerticalScrollIndicator={false} style={styles.sourcesList}>
-              {(activeDomain?.indicators ?? []).map((indicator) => (
-                <View
-                  key={indicator.id}
-                  style={[styles.sourceRow, { borderBottomColor: colors.borderLight }]}
-                >
-                  <Text
-                    style={{
-                      color: colors.textPrimary,
-                      fontSize: getFontSize(typography.sizes.bodySmall),
-                      fontFamily: typography.families.bodySemiBold,
-                      marginBottom: 2,
-                    }}
-                  >
-                    {indicator.labelKey}
-                  </Text>
-                  {/* Chaque mesure garde sa source exacte — la traçabilité
-                      exigée par le jury, lisible par n'importe qui. */}
-                  {indicator.history.map((mesure, index) => (
-                    <Text
-                      key={`${indicator.id}_${index}`}
-                      style={{
-                        color: colors.textSecondary,
-                        fontSize: getFontSize(typography.sizes.micro),
-                        fontFamily: typography.families.body,
-                        lineHeight: 16,
-                      }}
+
+            {(() => {
+              const tint = activeDomain
+                ? colors.thematic[activeDomain.colorToken]
+                : colors.primary;
+              const indicateurs = activeDomain?.indicators ?? [];
+              const nbMesures = indicateurs.reduce(
+                (total, indicateur) => total + indicateur.history.length,
+                0
+              );
+              return (
+                <>
+                  <View style={styles.sourcesHeader}>
+                    <View style={{ flex: 1 }}>
+                      <Text
+                        style={{
+                          color: colors.textPrimary,
+                          fontSize: getFontSize(typography.sizes.h4),
+                          fontFamily: typography.families.headingSemiBold,
+                        }}
+                      >
+                        {t('pays.sources')}
+                      </Text>
+                      <View style={styles.sourcesSubRow}>
+                        <View style={[styles.sourcesDomainDot, { backgroundColor: tint }]} />
+                        <Text
+                          style={{
+                            color: colors.textSecondary,
+                            fontSize: getFontSize(typography.sizes.caption),
+                            fontFamily: typography.families.bodyMedium,
+                          }}
+                        >
+                          {activeDomain?.sectionTitleKey}
+                          {nbMesures > 0 ? `  ·  ${nbMesures} mesures` : ''}
+                        </Text>
+                      </View>
+                    </View>
+                    <PressableScale
+                      onPress={() => setShowSources(false)}
+                      scaleTo={motion.scale.chip}
+                      accessibilityRole="button"
+                      accessibilityLabel={t('common.back')}
+                      style={[
+                        styles.sourcesClose,
+                        { backgroundColor: withAlpha(colors.textSecondary, 0.08) },
+                      ]}
                     >
-                      {mesure.dateMesure.slice(0, 4)} · {mesure.valeur} — {mesure.source}
-                    </Text>
-                  ))}
-                </View>
-              ))}
-              {(activeDomain?.indicators ?? []).length === 0 && (
-                <Text
-                  style={{
-                    color: colors.textSecondary,
-                    fontSize: getFontSize(typography.sizes.bodySmall),
-                    fontFamily: typography.families.body,
-                    paddingVertical: spacing.lg,
-                  }}
-                >
-                  {t('pays.emptyDomain')}
-                </Text>
-              )}
-            </ScrollView>
+                      <Ionicons name="close" size={18} color={colors.textSecondary} />
+                    </PressableScale>
+                  </View>
+
+                  <ScrollView showsVerticalScrollIndicator={false} style={styles.sourcesList}>
+                    {indicateurs.map((indicator) => (
+                      <View
+                        key={indicator.id}
+                        style={[styles.sourceCard, { backgroundColor: colors.background }]}
+                      >
+                        <View style={styles.sourceCardTitleRow}>
+                          <View style={[styles.sourceCardBar, { backgroundColor: tint }]} />
+                          <Text
+                            style={{
+                              flex: 1,
+                              color: colors.textPrimary,
+                              fontSize: getFontSize(typography.sizes.bodySmall),
+                              fontFamily: typography.families.bodySemiBold,
+                            }}
+                          >
+                            {indicator.labelKey}
+                          </Text>
+                        </View>
+
+                        {/* Chaque mesure garde sa source exacte — la traçabilité
+                            exigée par le jury, lisible par n'importe qui. */}
+                        {indicator.history.map((mesure, index) => {
+                          const [organisme, ...detail] = mesure.source.split(' — ');
+                          return (
+                            <View
+                              key={`${indicator.id}_${index}`}
+                              style={[
+                                styles.mesureRow,
+                                index > 0 && {
+                                  borderTopColor: colors.borderLight,
+                                  borderTopWidth: StyleSheet.hairlineWidth,
+                                },
+                              ]}
+                            >
+                              <View
+                                style={[styles.anneePill, { backgroundColor: withAlpha(tint, 0.12) }]}
+                              >
+                                <Text
+                                  style={{
+                                    color: tint,
+                                    fontSize: getFontSize(typography.sizes.micro),
+                                    fontFamily: typography.families.bodyBold,
+                                  }}
+                                >
+                                  {mesure.dateMesure.slice(0, 4)}
+                                </Text>
+                              </View>
+                              <View style={{ flex: 1 }}>
+                                <Text
+                                  style={{
+                                    color: colors.textPrimary,
+                                    fontSize: getFontSize(typography.sizes.caption),
+                                    fontFamily: typography.families.bodyBold,
+                                  }}
+                                >
+                                  {mesure.valeur}
+                                </Text>
+                                <View style={styles.sourceOrgRow}>
+                                  <Ionicons
+                                    name="library-outline"
+                                    size={11}
+                                    color={colors.textTertiary}
+                                  />
+                                  <Text
+                                    numberOfLines={2}
+                                    style={{
+                                      flex: 1,
+                                      color: colors.textTertiary,
+                                      fontSize: getFontSize(typography.sizes.micro),
+                                      fontFamily: typography.families.bodyMedium,
+                                      lineHeight: 14,
+                                    }}
+                                  >
+                                    {organisme}
+                                    {detail.length > 0 ? ` · ${detail.join(' — ')}` : ''}
+                                  </Text>
+                                </View>
+                              </View>
+                            </View>
+                          );
+                        })}
+                      </View>
+                    ))}
+                    {indicateurs.length === 0 && (
+                      <Text
+                        style={{
+                          color: colors.textSecondary,
+                          fontSize: getFontSize(typography.sizes.bodySmall),
+                          fontFamily: typography.families.body,
+                          paddingVertical: spacing.lg,
+                        }}
+                      >
+                        {t('pays.emptyDomain')}
+                      </Text>
+                    )}
+                  </ScrollView>
+                </>
+              );
+            })()}
           </View>
         </View>
       </Modal>
@@ -749,8 +834,63 @@ const styles = StyleSheet.create({
   sourcesList: {
     flexGrow: 0,
   },
-  sourceRow: {
-    paddingVertical: spacing.md,
-    borderBottomWidth: StyleSheet.hairlineWidth,
+  sourcesHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.md,
+    marginBottom: spacing.md,
+  },
+  sourcesSubRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    marginTop: 3,
+  },
+  sourcesDomainDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  sourcesClose: {
+    width: 32,
+    height: 32,
+    borderRadius: borderRadius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sourceCard: {
+    borderRadius: borderRadius.lg,
+    padding: spacing.md,
+    marginBottom: spacing.sm,
+  },
+  sourceCardTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginBottom: spacing.xs,
+  },
+  sourceCardBar: {
+    width: 3,
+    height: 14,
+    borderRadius: 2,
+  },
+  mesureRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingVertical: spacing.sm,
+  },
+  anneePill: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 3,
+    borderRadius: borderRadius.full,
+    minWidth: 46,
+    alignItems: 'center',
+  },
+  sourceOrgRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 1,
   },
 });

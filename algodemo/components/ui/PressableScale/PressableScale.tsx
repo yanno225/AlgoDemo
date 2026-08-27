@@ -4,6 +4,8 @@ import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withSpring,
+  withTiming,
+  Easing,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { motion } from '../../../constants/theme';
@@ -59,26 +61,39 @@ export const PressableScale: React.FC<PressableScaleProps> = ({
 }) => {
   const pressed = useSharedValue(0);
 
+  // La valeur est animée dans les handlers, pas dans le style : l'ENFONCEMENT
+  // est un timing court (le bouton suit le doigt, immédiatement), le
+  // RELÂCHEMENT un ressort vivant. Un ressort à l'aller donnait ce ressenti
+  // « dur » d'un bouton qui réagit un temps après le toucher.
   const animatedStyle = useAnimatedStyle(() => ({
-    transform: [
-      { scale: withSpring(1 - pressed.value * (1 - scaleTo), motion.press) },
-    ],
-    opacity: dimOnPress ? withSpring(1 - pressed.value * 0.35, motion.press) : 1,
+    transform: [{ scale: 1 - pressed.value * (1 - scaleTo) }],
+    opacity: dimOnPress ? 1 - pressed.value * 0.35 : 1,
   }));
 
   const handlePressIn = useCallback(() => {
     if (disabled) return;
-    pressed.value = 1;
-  }, [disabled, pressed]);
+    pressed.value = withTiming(1, {
+      duration: 90,
+      easing: Easing.out(Easing.quad),
+    });
+    // Le retour tactile part au CONTACT, comme un vrai bouton — pas au
+    // relâchement, où il arrive toujours en retard. Les haptiques de
+    // notification (success/warning) restent liées à l'action elle-même.
+    if (haptic === 'light' || haptic === 'medium' || haptic === 'heavy') {
+      void triggerHaptic(haptic);
+    }
+  }, [disabled, haptic, pressed]);
 
   const handlePressOut = useCallback(() => {
-    pressed.value = 0;
+    pressed.value = withSpring(0, motion.release);
   }, [pressed]);
 
   const handlePress = useCallback(
     (event: Parameters<NonNullable<PressableProps['onPress']>>[0]) => {
       if (disabled) return;
-      if (haptic !== 'none') void triggerHaptic(haptic);
+      if (haptic === 'success' || haptic === 'warning') {
+        void triggerHaptic(haptic);
+      }
       onPress?.(event);
     },
     [disabled, haptic, onPress]

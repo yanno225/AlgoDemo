@@ -409,6 +409,12 @@ export const thematicInk = (color: string): string => {
 export const motion = {
   /** Feedback de pression — vif, sans rebond parasite (100-150ms perçus) */
   press: { damping: 18, stiffness: 320, mass: 0.6 },
+  /**
+   * Relâchement d'une pression — le retour à l'échelle 1 est élastique et
+   * vivant. L'enfoncement, lui, doit être un timing court : un doigt qui
+   * touche attend une réaction immédiate, pas un ressort qui s'installe.
+   */
+  release: { damping: 13, stiffness: 240, mass: 0.7 },
   /** Entrée d'élément — souple, légèrement vivant */
   enter: { damping: 18, stiffness: 160, mass: 0.9 },
   /** Déplacement d'indicateur (pills, onglets) — glisse net et rapide */
