@@ -6,6 +6,7 @@ import {
   DonneesResumeDebat,
   DonneesSynthese,
   DonneesVerification,
+  FichierAAnalyser,
   IaService,
   IndicateurConnu,
   PropositionValeur,
@@ -432,6 +433,76 @@ export class AnthropicIaService implements IaService {
       ),
       eclairage: brut.eclairage?.trim() || null,
     };
+  }
+
+  /**
+   * Lit un fichier citoyen (image ou PDF) et en extrait les affirmations
+   * factuelles vérifiables — une étape de LECTURE fidèle, sans verdict : le
+   * texte extrait repart dans le circuit standard de vérification. Répond
+   * « AUCUNE_AFFIRMATION » si le fichier n'affirme rien de vérifiable.
+   */
+  async extraireAffirmationsFichier(
+    fichier: FichierAAnalyser,
+    question?: string,
+  ): Promise<string> {
+    const blocFichier =
+      fichier.mediaType === 'application/pdf'
+        ? {
+            type: 'document' as const,
+            source: {
+              type: 'base64' as const,
+              media_type: 'application/pdf' as const,
+              data: fichier.data,
+            },
+          }
+        : {
+            type: 'image' as const,
+            source: {
+              type: 'base64' as const,
+              media_type: fichier.mediaType as
+                | 'image/jpeg'
+                | 'image/png'
+                | 'image/webp'
+                | 'image/gif',
+              data: fichier.data,
+            },
+          };
+
+    const consigne =
+      `Un citoyen partage ce fichier pour vérification des faits.` +
+      (question?.trim() ? ` Sa question : « ${question.trim().slice(0, 300)} »` : '') +
+      `\n\nExtrais-en les 1 à 3 PRINCIPALES affirmations factuelles vérifiables ` +
+      `(chiffres, dates, faits précis), en français, chacune reformulée en une ` +
+      `phrase courte et autonome (compréhensible sans le fichier). ` +
+      `Reste STRICTEMENT fidèle au contenu — n'ajoute, ne corrige et ne ` +
+      `complète rien. Réponds UNIQUEMENT avec ces phrases, une par ligne. ` +
+      `Si le fichier ne contient aucune affirmation factuelle vérifiable, ` +
+      `réponds exactement : AUCUNE_AFFIRMATION`;
+
+    const reponse = await this.client.messages.create({
+      model: this.model,
+      max_tokens: 600,
+      system:
+        'Tu lis des documents et images partagés par des citoyens sur une plateforme civique. Tu extrais fidèlement ce qui y est affirmé, sans jamais rien inventer ni interpréter.',
+      messages: [
+        {
+          role: 'user',
+          content: [blocFichier, { type: 'text', text: consigne }],
+        },
+      ],
+    });
+
+    if (reponse.stop_reason === 'refusal') {
+      throw new Error(
+        'Le service IA a décliné la lecture de ce fichier (classifieurs de sécurité)',
+      );
+    }
+
+    return reponse.content
+      .filter((b) => b.type === 'text')
+      .map((b) => b.text)
+      .join('')
+      .trim();
   }
 
   /** Appel texte simple à l'API Claude (thinking adaptatif par défaut) */

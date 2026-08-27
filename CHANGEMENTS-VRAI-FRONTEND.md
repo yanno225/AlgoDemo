@@ -169,6 +169,21 @@ Toutes dans `src/database/migrations/`, à exécuter avec `npm run migration:run
   général issues des connaissances du modèle, JAMAIS comptées dans le
   verdict et affichées côté app « non vérifié par nos sources ».
 
+## Module IA — analyse de fichiers citoyens (NOUVEAU)
+
+- **`POST /assistant/verifier-fichier`** (multipart, tout compte
+  authentifié) : champ `fichier` (image JPEG/PNG/WebP/GIF ou PDF, 10 Mo
+  max) + `question` facultative. Deux temps : (1) l'IA multimodale LIT le
+  fichier et en extrait fidèlement 1-3 affirmations factuelles (méthode
+  optionnelle `extraireAffirmationsFichier` de l'interface IaService —
+  Anthropic seulement, 503 sinon) ; (2) ce texte repart dans le circuit
+  standard `verifier` (données plateforme + recherche liste blanche).
+  La réponse ajoute `affirmationAnalysee` : le citoyen voit exactement ce
+  qui a été soumis au verdict. Aucun stockage du fichier — analyse à la
+  volée. ⚠️ Prévoir des timeouts clients LONGS : la vérification complète
+  (recherche web comprise) prend 20 à 90 s — le mobile est passé à 180 s
+  (texte) et 240 s (fichier).
+
 ## Auth — droits RGPD self-service (NOUVEAU)
 
 - **`GET /auth/users/moi/historique`** (tout compte authentifié) : les 100

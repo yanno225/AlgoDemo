@@ -166,6 +166,25 @@ export interface IaService {
   verifierAffirmation(
     donnees: DonneesVerification,
   ): Promise<ResultatVerification>;
+
+  /**
+   * Lit un fichier partagé par un citoyen (image ou PDF) et en extrait les
+   * principales affirmations factuelles vérifiables — le texte obtenu
+   * repart ensuite dans `verifierAffirmation`. Étape de LECTURE fidèle,
+   * jamais de verdict ici. Optionnelle : seuls les fournisseurs multimodaux
+   * (Anthropic) la proposent ; sans elle, l'analyse de fichier renvoie 503.
+   */
+  extraireAffirmationsFichier?(
+    fichier: FichierAAnalyser,
+    question?: string,
+  ): Promise<string>;
+}
+
+/** Fichier citoyen soumis à l'analyse (image ou PDF, encodé base64). */
+export interface FichierAAnalyser {
+  /** Contenu encodé en base64, sans préfixe data-URI. */
+  data: string;
+  mediaType: string;
 }
 
 /** Données transmises à l'IA pour reformuler un indicateur collecté */
