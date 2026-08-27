@@ -108,6 +108,27 @@ export class ConsultationsService {
     return this.consultationRepo.save(consultation);
   }
 
+  /**
+   * Clôture anticipée : la date de clôture est ramenée à MAINTENANT — le
+   * vote ferme immédiatement sur tous les écrans (la clôture « naturelle »
+   * par échéance reste le fonctionnement normal). La consultation passe
+   * alors dans les clôturées, prête pour la publication des résultats.
+   */
+  async cloturer(id: string): Promise<Consultation> {
+    const consultation = await this.findOne(id);
+    const maintenant = new Date();
+    if (consultation.dateCloture <= maintenant) {
+      throw new BadRequestException('Cette consultation est déjà clôturée');
+    }
+    if (consultation.dateOuverture > maintenant) {
+      throw new BadRequestException(
+        "Cette consultation n'a pas encore ouvert — modifiez ses dates ou supprimez-la",
+      );
+    }
+    consultation.dateCloture = maintenant;
+    return this.consultationRepo.save(consultation);
+  }
+
   async remove(id: string): Promise<void> {
     const consultation = await this.findOne(id);
     await this.consultationRepo.remove(consultation);

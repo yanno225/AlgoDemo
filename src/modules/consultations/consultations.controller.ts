@@ -69,6 +69,17 @@ export class ConsultationsController {
     return this.consultationsService.update(id, dto);
   }
 
+  @Patch(':id/cloturer')
+  @Roles(...GESTIONNAIRES)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary:
+      'Clôturer le vote immédiatement (POINT_FOCAL, ADMIN) — la consultation passe dans les clôturées, prête à publier',
+  })
+  cloturer(@Param('id', ParseUUIDPipe) id: string) {
+    return this.consultationsService.cloturer(id);
+  }
+
   @Patch(':id/resultats/publier')
   @Roles(Role.ADMIN)
   @ApiBearerAuth()
