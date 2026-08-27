@@ -13,10 +13,12 @@ import {
 import {
   compterResumesEnAttente,
   estOuverte,
+  getDepouillement,
   listConsultationsAdmin,
   listDebats,
   type ConsultationAdmin,
   type DebatAdmin,
+  type Depouillement,
 } from "@/lib/data/debats";
 import { demarrerDebat, publierResultats } from "@/lib/data/debats-actions";
 import { urlMediaAbsolue } from "@/lib/api/client";
@@ -413,7 +415,7 @@ export default async function DebatsPage({
 }
 
 // ─── Carte consultation ──────────────────────────────────────────────
-function CarteConsultation({
+async function CarteConsultation({
   consultation,
   index,
   cloturee = false,
@@ -425,6 +427,18 @@ function CarteConsultation({
   /** Vraie pour la section « Ouvertes » : la clôture anticipée s'y propose. */
   ouverte?: boolean;
 }) {
+  // Dès la clôture, le staff voit les comptes de l'urne — c'est le
+  // dépouillement, l'étape entre « clôturer » et « publier ». Le serveur
+  // le refuse tant que le vote est ouvert (aucun résultat intermédiaire).
+  let depouillement: Depouillement | null = null;
+  if (cloturee) {
+    try {
+      depouillement = await getDepouillement(consultation.id);
+    } catch {
+      // Indisponible (course avec la clôture, API…) : la carte reste utilisable.
+    }
+  }
+
   return (
     <Card
       className={cn("animate-rise", cloturee && "bg-surface-raised")}
@@ -465,6 +479,46 @@ function CarteConsultation({
           </span>
         ))}
       </div>
+
+      {/* ─── Dépouillement (staff) : les comptes de l'urne ─────────── */}
+      {depouillement && (
+        <div className="mt-4 rounded-xl bg-surface-raised p-3.5 ring-1 ring-hairline">
+          <p className="mb-2.5 text-[11px] font-bold uppercase tracking-[0.12em] text-ink-subtle">
+            Dépouillement · {depouillement.totalVoix} voix ·{" "}
+            {depouillement.emargements} votant
+            {depouillement.emargements > 1 ? "s" : ""} émargé
+            {depouillement.emargements > 1 ? "s" : ""}
+          </p>
+          <ul className="space-y-2">
+            {[...depouillement.options]
+              .sort((a, b) => b.nombreVotes - a.nombreVotes)
+              .map((option) => {
+                const pourcent =
+                  depouillement.totalVoix > 0
+                    ? Math.round((option.nombreVotes / depouillement.totalVoix) * 100)
+                    : 0;
+                return (
+                  <li key={option.optionId}>
+                    <div className="flex items-baseline justify-between gap-3">
+                      <span className="truncate text-[13px] font-semibold text-ink">
+                        {option.libelle}
+                      </span>
+                      <span className="tabular shrink-0 text-[12px] font-bold text-ink-muted">
+                        {option.nombreVotes} · {pourcent}%
+                      </span>
+                    </div>
+                    <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-surface ring-1 ring-hairline">
+                      <div
+                        className="h-full rounded-full bg-primary transition-[width]"
+                        style={{ width: `${pourcent}%` }}
+                      />
+                    </div>
+                  </li>
+                );
+              })}
+          </ul>
+        </div>
+      )}
 
       {/* Clôture anticipée : le vote ferme tout de suite, la carte passe
           dans « Clôturées » où la publication devient possible. */}

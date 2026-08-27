@@ -160,11 +160,46 @@ export class ConsultationsService {
     if (!consultation.resultatsPublies) {
       throw new NotFoundException('Résultats non publiés pour cette consultation');
     }
-    // Dépouillement : on compte les bulletins de l'urne, sans jamais toucher
-    // à l'émargement.
+    return this.compterBulletins(consultation);
+  }
+
+  /**
+   * Dépouillement STAFF : les comptes de l'urne, visibles dès la clôture et
+   * AVANT publication — l'admin voit ce qu'il s'apprête à publier. Refusé
+   * tant que le vote est ouvert : aucun résultat intermédiaire ne doit
+   * exister, il influencerait les votants (même règle qu'un scrutin réel).
+   */
+  async depouillement(
+    id: string,
+  ): Promise<{ options: ResultatOption[]; totalVoix: number; emargements: number }> {
+    const consultation = await this.findOne(id);
+    if (consultation.estOuverte() || consultation.dateOuverture > new Date()) {
+      throw new ForbiddenException(
+        "Le dépouillement n'ouvre qu'après la clôture du vote",
+      );
+    }
+    const options = await this.compterBulletins(consultation);
+    const emarges: { nombre: number }[] = await this.participationRepo.query(
+      `SELECT COUNT(*)::int AS nombre FROM "participations_consultation" WHERE "consultationId" = $1`,
+      [id],
+    );
+    return {
+      options,
+      totalVoix: options.reduce((total, o) => total + o.nombreVotes, 0),
+      emargements: Number(emarges[0]?.nombre ?? 0),
+    };
+  }
+
+  /**
+   * Le dépouillement proprement dit : compter les bulletins de l'urne, sans
+   * jamais toucher à l'émargement — les deux tables restent sans lien.
+   */
+  private async compterBulletins(
+    consultation: Consultation,
+  ): Promise<ResultatOption[]> {
     const comptes: { optionId: string; nombre: string }[] = await this.bulletinRepo.query(
       `SELECT "optionId", COUNT(*)::int AS nombre FROM "bulletins" WHERE "consultationId" = $1 GROUP BY "optionId"`,
-      [id],
+      [consultation.id],
     );
     const parOption = new Map(comptes.map((c) => [c.optionId, Number(c.nombre)]));
     return consultation.options.map((option) => ({

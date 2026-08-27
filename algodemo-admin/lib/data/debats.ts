@@ -66,6 +66,23 @@ export function listConsultationsAdmin(): Promise<ConsultationAdmin[]> {
   });
 }
 
+/** Le dépouillement d'une consultation clôturée, tel que servi au staff. */
+export interface Depouillement {
+  options: { optionId: string; libelle: string; nombreVotes: number }[];
+  totalVoix: number;
+  /** Citoyens émargés — jamais reliés aux bulletins (secret du vote). */
+  emargements: number;
+}
+
+/**
+ * Comptes de l'urne, disponibles dès la clôture et AVANT publication :
+ * l'admin voit ce qu'il s'apprête à publier. Le serveur refuse tant que le
+ * vote est ouvert — aucun résultat intermédiaire n'existe.
+ */
+export function getDepouillement(id: string): Promise<Depouillement> {
+  return apiFetch<Depouillement>(`/consultations/${id}/depouillement`);
+}
+
 /** Une consultation est ouverte si l'instant présent est dans sa fenêtre. */
 export function estOuverte(consultation: ConsultationAdmin): boolean {
   const maintenant = Date.now();
