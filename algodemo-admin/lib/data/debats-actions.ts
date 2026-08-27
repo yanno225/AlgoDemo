@@ -205,6 +205,18 @@ export async function creerConsultation(formData: FormData) {
 }
 
 /** Les résultats restent invisibles des citoyens tant qu'un admin ne publie pas. */
+/**
+ * Clôture anticipée du vote : la consultation ferme immédiatement sur tous
+ * les écrans et passe dans les clôturées — prête pour la publication.
+ */
+export async function cloturerConsultation(formData: FormData) {
+  await requireSectionAccess("/debats");
+  const id = String(formData.get("id") ?? "");
+  if (!id) return;
+  await apiFetch(`/consultations/${id}/cloturer`, { methode: "PATCH" });
+  invalider();
+}
+
 export async function publierResultats(formData: FormData) {
   await requireSectionAccess("/debats");
   const id = String(formData.get("id") ?? "");

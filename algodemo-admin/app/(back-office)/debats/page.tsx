@@ -26,6 +26,7 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { Tabs } from "@/components/ui/Tabs";
 import { Badge } from "@/components/ui/Badge";
 import { ActionsDebatPlanifie } from "@/components/debats/ActionsDebatPlanifie";
+import { CloturerConsultationBouton } from "@/components/debats/CloturerConsultationBouton";
 import { Button } from "@/components/ui/Button";
 import { Card, CardHeader } from "@/components/ui/Card";
 import { StatusDot } from "@/components/ui/StatusDot";
@@ -358,6 +359,7 @@ export default async function DebatsPage({
                     key={consultation.id}
                     consultation={consultation}
                     index={index}
+                    ouverte
                   />
                 ))}
               </div>
@@ -415,10 +417,13 @@ function CarteConsultation({
   consultation,
   index,
   cloturee = false,
+  ouverte = false,
 }: {
   consultation: ConsultationAdmin;
   index: number;
   cloturee?: boolean;
+  /** Vraie pour la section « Ouvertes » : la clôture anticipée s'y propose. */
+  ouverte?: boolean;
 }) {
   return (
     <Card
@@ -460,6 +465,15 @@ function CarteConsultation({
           </span>
         ))}
       </div>
+
+      {/* Clôture anticipée : le vote ferme tout de suite, la carte passe
+          dans « Clôturées » où la publication devient possible. */}
+      {ouverte && (
+        <CloturerConsultationBouton
+          consultationId={consultation.id}
+          titre={consultation.titre}
+        />
+      )}
 
       {/* Le dépouillement reste secret jusqu'à publication par un admin. */}
       {cloturee && !consultation.resultatsPublies && (

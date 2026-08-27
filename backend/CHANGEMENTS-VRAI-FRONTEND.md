@@ -82,6 +82,16 @@ Toutes dans `src/database/migrations/`, à exécuter avec `npm run migration:run
 - Limite résiduelle assumée : un accès direct au SGBD pourrait corréler via
   `xmin` — hors modèle de menace applicatif.
 
+## Module Consultations — clôture anticipée (NOUVEAU)
+
+- **`PATCH /consultations/:id/cloturer`** (POINT_FOCAL/ADMIN) : ramène
+  `dateCloture` à MAINTENANT — le vote ferme immédiatement partout (la
+  clôture par échéance reste le fonctionnement normal). Refusé si déjà
+  clôturée ou pas encore ouverte. La consultation passe dans les
+  clôturées, où la publication des résultats devient possible. Bouton
+  « Clôturer le vote » (avec confirmation) sur les cartes ouvertes de la
+  console admin.
+
 ## Module Consultations — sondages
 
 - **`type`** (`CONSULTATION` | `SONDAGE`, défaut CONSULTATION) sur
