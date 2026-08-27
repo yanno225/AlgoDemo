@@ -92,6 +92,13 @@ Toutes dans `src/database/migrations/`, à exécuter avec `npm run migration:run
   « Clôturer le vote » (avec confirmation) sur les cartes ouvertes de la
   console admin.
 
+- **`GET /consultations/:id/depouillement`** (POINT_FOCAL/ADMIN) : les
+  comptes de l'urne + total des voix + émargements, dès la clôture et
+  AVANT publication — le staff voit ce qu'il s'apprête à publier. Refusé
+  tant que le vote est ouvert (aucun résultat intermédiaire, comme un
+  scrutin réel). La console admin affiche ces barres dans chaque carte
+  clôturée, au-dessus de « Publier les résultats ».
+
 ## Module Consultations — sondages
 
 - **`type`** (`CONSULTATION` | `SONDAGE`, défaut CONSULTATION) sur

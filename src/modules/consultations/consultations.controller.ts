@@ -69,6 +69,17 @@ export class ConsultationsController {
     return this.consultationsService.update(id, dto);
   }
 
+  @Get(':id/depouillement')
+  @Roles(...GESTIONNAIRES)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary:
+      'Dépouillement staff : comptes de l’urne dès la clôture, AVANT publication — refusé tant que le vote est ouvert',
+  })
+  depouillement(@Param('id', ParseUUIDPipe) id: string) {
+    return this.consultationsService.depouillement(id);
+  }
+
   @Patch(':id/cloturer')
   @Roles(...GESTIONNAIRES)
   @ApiBearerAuth()
