@@ -205,6 +205,18 @@ Toutes dans `src/database/migrations/`, à exécuter avec `npm run migration:run
 - Distinct des signalements de direct (Débats) et des signalements de contenus
   (Feed) : ici on signale le monde réel, pas la plateforme.
 
+## Module Débats — annulation et suppression d'un débat planifié (NOUVEAU)
+
+- **Migration 1755200000000-AjouterStatutAnnule** :
+  valeur `ANNULE` ajoutée à l'enum `debats_statut_enum` (via
+  COMMIT/ALTER TYPE/BEGIN — un ADD VALUE ne s'exécute pas en transaction).
+- **`PATCH /debats/:id/annuler`** (POINT_FOCAL/ADMIN) : PLANIFIE → ANNULE.
+  Le débat reste en base (traçabilité) mais l'app mobile le filtre de tous
+  ses écrans. `DELETE /debats/:id` refuse désormais un débat EN_COURS
+  (un direct se clôture, il ne se supprime pas) — cascade sinon.
+- Console admin : boutons Annuler/Supprimer (avec confirmation) sur les
+  débats à venir, section « Annulés » avec suppression définitive.
+
 ## Module Débats — Prise de parole des citoyens (« main levée », NOUVEAU)
 
 - **Migration 1755100000000-CreerDemandesParole** : table `demandes_parole`

@@ -90,6 +90,16 @@ export class DebatsController {
     return this.debatsService.cloturer(id);
   }
 
+  @Patch(':id/annuler')
+  @Roles(Role.POINT_FOCAL, Role.ADMIN)
+  @ApiOperation({
+    summary:
+      'Annuler un débat planifié (POINT_FOCAL/ADMIN) — il sort des écrans publics, reste tracé',
+  })
+  annuler(@Param('id', ParseUUIDPipe) id: string) {
+    return this.debatsService.annuler(id);
+  }
+
   @Patch(':id/replay')
   @Roles(Role.POINT_FOCAL, Role.ADMIN)
   @ApiOperation({ summary: 'Renseigner l’URL de replay (débat terminé)' })

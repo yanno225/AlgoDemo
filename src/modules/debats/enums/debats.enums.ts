@@ -1,8 +1,13 @@
-/** Cycle de vie d'un débat : planifié → en cours (live) → terminé (replay/archive) */
+/**
+ * Cycle de vie d'un débat : planifié → en cours (live) → terminé
+ * (replay/archive). Un débat planifié peut aussi être annulé par le staff —
+ * il sort des écrans publics mais reste tracé en base.
+ */
 export enum StatutDebat {
   PLANIFIE = 'PLANIFIE',
   EN_COURS = 'EN_COURS',
   TERMINE = 'TERMINE',
+  ANNULE = 'ANNULE',
 }
 
 /** Rôle DANS un débat (indépendant du rôle applicatif global) */
