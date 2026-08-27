@@ -21,7 +21,14 @@ import { Button } from '../components/ui/Button';
 import { PressableScale } from '../components/ui/PressableScale';
 import { VerifyingDots } from '../components/feature/auth/VerifyingDots';
 import { enterListItem, enterFade } from '../components/ui/motion';
-import { verifyFact, type FactCheck } from '../services/api/assistant';
+import * as DocumentPicker from 'expo-document-picker';
+import {
+  verifyFact,
+  verifyFactFromFile,
+  type FactCheck,
+  type FileFactCheck,
+  type FileToVerify,
+} from '../services/api/assistant';
 import { toApiError } from '../services/api/client';
 import {
   spacing,
@@ -35,11 +42,16 @@ import {
 
 const AFFIRMATION_MAX = 500;
 
+/** 10 Mo — la même limite que le serveur, refusée AVANT l'envoi. */
+const FICHIER_MAX_OCTETS = 10 * 1024 * 1024;
+
 /** Une vérification menée pendant la session, la plus récente en tête. */
 interface Verification {
   id: string;
   affirmation: string;
-  resultat: FactCheck;
+  /** Nom du fichier analysé, le cas échéant. */
+  fichierNom?: string;
+  resultat: FactCheck & Partial<Pick<FileFactCheck, 'affirmationAnalysee'>>;
 }
 
 export default function AssistantScreen() {
@@ -49,22 +61,52 @@ export default function AssistantScreen() {
   const { isAuthenticated } = useAuthStore();
 
   const [affirmation, setAffirmation] = useState('');
+  const [fichier, setFichier] = useState<FileToVerify | null>(null);
   const [isVerifying, setIsVerifying] = useState(false);
   const [erreur, setErreur] = useState('');
   const [verifications, setVerifications] = useState<Verification[]>([]);
 
+  /** Choisir une image ou un PDF à faire lire par l'assistant. */
+  const choisirFichier = async () => {
+    setErreur('');
+    const resultat = await DocumentPicker.getDocumentAsync({
+      type: ['image/*', 'application/pdf'],
+      copyToCacheDirectory: true,
+      multiple: false,
+    });
+    if (resultat.canceled) return;
+    const choisi = resultat.assets[0];
+    if ((choisi.size ?? 0) > FICHIER_MAX_OCTETS) {
+      setErreur(t('ai.fileTooBig'));
+      return;
+    }
+    setFichier({
+      uri: choisi.uri,
+      name: choisi.name,
+      mimeType: choisi.mimeType ?? 'application/octet-stream',
+    });
+  };
+
   const verifier = async () => {
     const texte = affirmation.trim();
-    if (!texte || isVerifying) return;
+    if ((!texte && !fichier) || isVerifying) return;
     setErreur('');
     setIsVerifying(true);
     try {
-      const resultat = await verifyFact(texte);
+      const resultat = fichier
+        ? await verifyFactFromFile(fichier, texte || undefined)
+        : await verifyFact(texte);
       setVerifications((courantes) => [
-        { id: `${Date.now()}`, affirmation: texte, resultat },
+        {
+          id: `${Date.now()}`,
+          affirmation: texte || fichier?.name || '',
+          fichierNom: fichier?.name,
+          resultat,
+        },
         ...courantes,
       ]);
       setAffirmation('');
+      setFichier(null);
     } catch (e) {
       setErreur(toApiError(e).message || t('ai.error'));
     } finally {
@@ -161,18 +203,75 @@ export default function AssistantScreen() {
                 },
               ]}
             />
-            <Text
-              style={{
-                alignSelf: 'flex-end',
-                color: colors.textTertiary,
-                fontSize: getFontSize(typography.sizes.micro),
-                fontFamily: typography.families.body,
-                marginTop: spacing.xs,
-                marginBottom: spacing.md,
-              }}
-            >
-              {affirmation.length}/{AFFIRMATION_MAX}
-            </Text>
+            <View style={styles.inputFooter}>
+              {/* Joindre un tract, une capture, un article PDF… l'IA le lit. */}
+              <PressableScale
+                onPress={() => void choisirFichier()}
+                scaleTo={motion.scale.chip}
+                haptic="light"
+                disabled={isVerifying}
+                accessibilityRole="button"
+                accessibilityLabel={t('ai.attach')}
+                style={[
+                  styles.attachButton,
+                  { backgroundColor: withAlpha(colors.primary, 0.1) },
+                ]}
+              >
+                <Ionicons name="attach" size={16} color={colors.primary} />
+                <Text
+                  style={{
+                    color: colors.primary,
+                    fontSize: getFontSize(typography.sizes.micro),
+                    fontFamily: typography.families.bodySemiBold,
+                  }}
+                >
+                  {t('ai.attach')}
+                </Text>
+              </PressableScale>
+              <Text
+                style={{
+                  color: colors.textTertiary,
+                  fontSize: getFontSize(typography.sizes.micro),
+                  fontFamily: typography.families.body,
+                }}
+              >
+                {affirmation.length}/{AFFIRMATION_MAX}
+              </Text>
+            </View>
+
+            {fichier && (
+              <Animated.View
+                entering={enterFade()}
+                style={[styles.fileChip, { backgroundColor: colors.surfaceElevated }]}
+              >
+                <Ionicons
+                  name={fichier.mimeType === 'application/pdf' ? 'document-text' : 'image'}
+                  size={15}
+                  color={colors.primary}
+                />
+                <Text
+                  numberOfLines={1}
+                  style={{
+                    flex: 1,
+                    color: colors.textPrimary,
+                    fontSize: getFontSize(typography.sizes.caption),
+                    fontFamily: typography.families.bodyMedium,
+                  }}
+                >
+                  {fichier.name}
+                </Text>
+                <PressableScale
+                  onPress={() => setFichier(null)}
+                  scaleTo={0.9}
+                  haptic="light"
+                  accessibilityRole="button"
+                  accessibilityLabel={t('ai.removeFile')}
+                  style={styles.fileRemove}
+                >
+                  <Ionicons name="close-circle" size={17} color={colors.textTertiary} />
+                </PressableScale>
+              </Animated.View>
+            )}
 
             {!isAuthenticated ? (
               <Button
@@ -187,9 +286,9 @@ export default function AssistantScreen() {
               </View>
             ) : (
               <Button
-                label={t('ai.verify')}
+                label={fichier ? t('ai.verifyFile') : t('ai.verify')}
                 onPress={() => void verifier()}
-                disabled={!affirmation.trim()}
+                disabled={!affirmation.trim() && !fichier}
                 icon="sparkles"
                 haptic="medium"
                 size="lg"
@@ -235,8 +334,43 @@ export default function AssistantScreen() {
                     marginBottom: spacing.md,
                   }}
                 >
-                  « {verification.affirmation} »
+                  {verification.fichierNom ? '📎 ' : '« '}
+                  {verification.affirmation}
+                  {verification.fichierNom ? '' : ' »'}
                 </Text>
+
+                {/* Ce que l'IA a LU dans le fichier — c'est ce texte qui a
+                    été soumis au verdict, le citoyen le voit tel quel. */}
+                {verification.resultat.affirmationAnalysee ? (
+                  <View
+                    style={[
+                      styles.element,
+                      { backgroundColor: withAlpha(colors.secondary, 0.1) },
+                    ]}
+                  >
+                    <Text
+                      style={{
+                        color: colors.textTertiary,
+                        fontSize: getFontSize(typography.sizes.micro),
+                        fontFamily: typography.families.bodyBold,
+                        letterSpacing: 0.8,
+                        marginBottom: 4,
+                      }}
+                    >
+                      {t('ai.extractedTitle').toUpperCase()}
+                    </Text>
+                    <Text
+                      style={{
+                        color: colors.textPrimary,
+                        fontSize: getFontSize(typography.sizes.caption),
+                        fontFamily: typography.families.body,
+                        lineHeight: 18,
+                      }}
+                    >
+                      {verification.resultat.affirmationAnalysee}
+                    </Text>
+                  </View>
+                ) : null}
 
                 <View style={[styles.verdict, { backgroundColor: withAlpha(style.couleur, 0.12) }]}>
                   <Ionicons name={style.icone} size={17} color={style.couleur} />
@@ -518,6 +652,33 @@ const styles = StyleSheet.create({
     height: 58,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  inputFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  attachButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 6,
+    borderRadius: borderRadius.full,
+  },
+  fileChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    borderRadius: borderRadius.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  fileRemove: {
+    padding: 2,
   },
   errorRow: {
     flexDirection: 'row',

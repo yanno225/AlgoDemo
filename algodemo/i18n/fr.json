@@ -391,7 +391,12 @@
     "intro": "Collez une affirmation entendue dans un débat, un article ou un réseau social : l'assistant la confronte aux données mesurées et validées de la plateforme, sources à l'appui.",
     "placeholder": "Ex. : « Le taux de participation des jeunes aux élections a augmenté »…",
     "verify": "Vérifier",
+    "verifyFile": "Analyser le fichier",
     "verifying": "Analyse des données…",
+    "attach": "Joindre un fichier",
+    "removeFile": "Retirer le fichier",
+    "fileTooBig": "Fichier trop volumineux — 10 Mo maximum.",
+    "extractedTitle": "Affirmations lues dans le fichier",
     "signedOut": "Connectez-vous pour utiliser l'assistant.",
     "error": "L'assistant n'a pas pu répondre. Vérifiez votre connexion puis réessayez.",
     "verdicts": {

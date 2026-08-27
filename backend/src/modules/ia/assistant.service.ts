@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, ServiceUnavailableException } from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
 import {
@@ -37,6 +37,48 @@ export class AssistantService {
       references,
       domainesAutorises,
     });
+  }
+
+  /**
+   * Vérification à partir d'un FICHIER citoyen (image ou PDF) : l'IA en
+   * extrait d'abord fidèlement les affirmations factuelles, puis ce texte
+   * repart dans le circuit standard (données de la plateforme + recherche
+   * sur liste blanche). `affirmationAnalysee` montre au citoyen ce qui a
+   * réellement été soumis au verdict — transparence totale.
+   */
+  async verifierFichier(
+    fichier: { buffer: Buffer; mimetype: string },
+    question?: string,
+  ): Promise<ResultatVerification & { affirmationAnalysee: string | null }> {
+    if (!this.iaService.extraireAffirmationsFichier) {
+      throw new ServiceUnavailableException(
+        "L'analyse de fichiers n'est pas disponible avec le fournisseur IA configuré",
+      );
+    }
+
+    const extraites = await this.iaService.extraireAffirmationsFichier(
+      {
+        data: fichier.buffer.toString('base64'),
+        mediaType: fichier.mimetype,
+      },
+      question,
+    );
+
+    if (!extraites || extraites.includes('AUCUNE_AFFIRMATION')) {
+      return {
+        verdict: 'NON_VERIFIABLE',
+        explication:
+          "Aucune affirmation factuelle vérifiable n'a été trouvée dans ce fichier — il ne contient ni chiffre, ni fait précis à confronter à nos sources.",
+        elements: [],
+        references: [],
+        sourcesWeb: [],
+        eclairage: null,
+        affirmationAnalysee: null,
+      };
+    }
+
+    const resultat = await this.verifier(extraites);
+    return { ...resultat, affirmationAnalysee: extraites };
   }
 
   /**
