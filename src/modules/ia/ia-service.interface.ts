@@ -103,7 +103,14 @@ export interface SourceWeb {
 }
 
 export interface ResultatVerification {
-  verdict: 'COHERENT' | 'CONTREDIT' | 'NON_VERIFIABLE';
+  /**
+   * COHERENT/CONTREDIT/NON_VERIFIABLE jugent une AFFIRMATION factuelle.
+   * REPONSE est le mode pédagogique : le citoyen a posé une QUESTION civique
+   * (démocratie, citoyenneté, désinformation…) — `explication` porte alors
+   * une vraie réponse d'éducation civique, fluide et complète, qui peut
+   * s'appuyer sur les connaissances du modèle (présentée comme telle).
+   */
+  verdict: 'COHERENT' | 'CONTREDIT' | 'NON_VERIFIABLE' | 'REPONSE';
   /** Explication en français simple, appuyée uniquement sur les éléments cités */
   explication: string;
   /** Sous-ensemble des données fournies effectivement utilisées pour juger */
