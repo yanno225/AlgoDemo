@@ -39,6 +39,27 @@ Toutes dans `src/database/migrations/`, à exécuter avec `npm run migration:run
   inventées).
 - Coût constaté : ~5-7 ¢ par ingestion (~90 indicateurs dans le prompt).
 
+## Module Collecte — extension de la couverture automatique (28/08)
+
+- **Connecteur RSF** (`services/rsf.connector.ts`) : lit la page pays
+  officielle rsf.org et en extrait le score courant (« Score : NN,NN ») et
+  l'année d'édition (« Classement 20XX ») pour l'indicateur « Indice de
+  liberté de la presse (score RSF sur 100) ». Tolérant à l'échec : page
+  illisible = zéro valeur, jamais une valeur douteuse. Extensible aux 19
+  pays via `PAGES_PAYS`.
+- **+7 correspondances Banque mondiale** (chaque code VÉRIFIÉ sur l'API
+  pour CIV avant ajout) : femmes au parlement (SG.GEN.PARL.ZS), travail
+  des enfants (SL.TLF.0714.ZS), redoublants (SE.PRM.REPT.ZS), enfants non
+  scolarisés (SE.PRM.UNER.ZS), suicide (SH.STA.SUIC.P5), aires protégées
+  (ER.LND.PTLD.ZS), CO₂ (EN.GHG.CO2.PC.CE) — proxys assumés dans
+  l'intitulé, l'admin valide.
+- Première collecte complète exécutée : **105 propositions réelles**
+  (BM 89, OMS 15, RSF 1) couvrant 20 indicateurs dont 10 encore vides.
+  Le cron hebdomadaire (`collecte-hebdomadaire`) entretient ensuite tout
+  seul. Les ~63 indicateurs restants sont administratifs (CEI, ministères,
+  ANSTAT — pas d'API ouverte) : chemin prévu = `POST /collecte/ingerer-texte`
+  (extraction IA depuis documents officiels, liste blanche obligatoire).
+
 ## Module Collecte (`src/modules/collecte/`)
 
 - **Liste blanche `sources_autorisees`** : CRUD ADMIN sous `/collecte/sources`,

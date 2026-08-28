@@ -10,6 +10,7 @@ import { SourceAutorisee } from './entities/source-autorisee.entity';
 import { BanqueMondialeConnector } from './services/banque-mondiale.connector';
 import { CollecteService } from './services/collecte.service';
 import { OmsConnector } from './services/oms.connector';
+import { RsfConnector } from './services/rsf.connector';
 import { SOURCE_CONNECTORS } from './services/source-connector.interface';
 import { SourcesAutoriseesService } from './services/sources-autorisees.service';
 
@@ -36,10 +37,15 @@ import { SourcesAutoriseesService } from './services/sources-autorisees.service'
     SourcesAutoriseesService,
     BanqueMondialeConnector,
     OmsConnector,
+    RsfConnector,
     {
       provide: SOURCE_CONNECTORS,
-      inject: [BanqueMondialeConnector, OmsConnector],
-      useFactory: (bm: BanqueMondialeConnector, oms: OmsConnector) => [bm, oms],
+      inject: [BanqueMondialeConnector, OmsConnector, RsfConnector],
+      useFactory: (
+        bm: BanqueMondialeConnector,
+        oms: OmsConnector,
+        rsf: RsfConnector,
+      ) => [bm, oms, rsf],
     },
   ],
 })
