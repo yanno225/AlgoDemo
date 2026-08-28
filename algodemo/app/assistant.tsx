@@ -119,7 +119,10 @@ export default function AssistantScreen() {
       ? { couleur: colors.success, icone: 'checkmark-circle' as const }
       : verdict === 'CONTREDIT'
         ? { couleur: colors.error, icone: 'close-circle' as const }
-        : { couleur: colors.textTertiary, icone: 'help-circle' as const };
+        : verdict === 'REPONSE'
+          ? // Mode pédagogique : pas un jugement, une réponse de l'assistant.
+            { couleur: colors.primary, icone: 'chatbubble-ellipses' as const }
+          : { couleur: colors.textTertiary, icone: 'help-circle' as const };
 
   return (
     <Screen>

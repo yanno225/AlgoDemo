@@ -402,7 +402,8 @@
     "verdicts": {
       "COHERENT": "Cohérent avec nos données",
       "CONTREDIT": "Contredit par nos données",
-      "NON_VERIFIABLE": "Non vérifiable avec nos données"
+      "NON_VERIFIABLE": "Non vérifiable avec nos données",
+      "REPONSE": "Réponse de l'assistant"
     },
     "elementsTitle": "Données utilisées",
     "referencesTitle": "Références de la plateforme",

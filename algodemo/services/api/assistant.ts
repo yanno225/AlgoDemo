@@ -8,7 +8,12 @@ import { apiClient } from './client';
  * provient de ces données, jamais d'une invention du modèle.
  */
 
-export type FactVerdict = 'COHERENT' | 'CONTREDIT' | 'NON_VERIFIABLE';
+/**
+ * COHERENT/CONTREDIT/NON_VERIFIABLE jugent une affirmation factuelle ;
+ * REPONSE est le mode pédagogique — le citoyen a posé une question civique
+ * et `explication` porte une vraie réponse d'éducation civique.
+ */
+export type FactVerdict = 'COHERENT' | 'CONTREDIT' | 'NON_VERIFIABLE' | 'REPONSE';
 
 export interface FactElement {
   thematique: string;
